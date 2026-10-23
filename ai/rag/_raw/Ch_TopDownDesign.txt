@@ -1,0 +1,270 @@
+===== PAGE 1 =====
+Top – Down Design
+
+===== PAGE 2 =====
+Design a clock show HH:MM
+ on 4 digit of 7-segments
+
+===== PAGE 3 =====
+Top Layer
+TheClock
+                                7
+CLK              Segment[a:g]
+                Common[3:0] 4
+
+===== PAGE 4 =====
+TheClock
+                            2 Layer
+                             nd
+                 ClockHH_MM       Display
+                              ?
+                                            7
+                                                Segment[a:g]
+CLK              CLK_1Sec
+                                            4   Common[3:0]
+
+===== PAGE 5 =====
+2 Layer (Option 1)
+      TheClock
+              nd
+                 ClockHH_MM                Display
+                               Hour    5
+                                           Hour
+                                                     Data    7
+                                                                 Segment[a:g]
+CLK              CLK_1Sec
+                              Minute   6   Min
+                                                             4
+                                                     Digit       Common[3:0]
+
+===== PAGE 6 =====
+2 Layer (Option 2)
+      TheClock
+              nd
+                 ClockHH_MM                  Display
+                                         2
+                               Hour10        H1
+                                         4                     7
+                               Hour1         H2        Data        Segment[a:g]
+CLK              CLK_1Sec
+                              Minute10   3   M1
+                                                               4
+                                         4             Digit       Common[3:0]
+                              Minute1        M2
+
+===== PAGE 7 =====
+2 Layer (Option 2.1)
+            nd
+      TheClock
+                 ClockHH_MM                  Display
+                                         4
+                               Hour10        H1
+                                         4                     7
+                               Hour1         H2        Data        Segment[a:g]
+CLK              CLK_1Sec
+                              Minute10   4   M1
+                                                               4
+                                         4             Digit       Common[3:0]
+                              Minute1        M2
+
+===== PAGE 8 =====
+3 Layer (Display)
+                    rd
+         Display
+                                   BCDto7Seg
+H1   4             0
+H2   4             1
+                           Y   4   BCD   Segments
+                                                    7   Data[6:0]
+M1   4             2
+M2   4             3 Sel
+                               ?
+                       2
+                                                    4   Digit[3:0]
+
+===== PAGE 9 =====
+3 Layer (Display)
+                                  rd
+               Display
+                                                 BCDto7Seg
+H1      4                        0
+H2     4                         1
+                                         Y   4   BCD   Segments
+                                                                  7   Data[6:0]
+M1      4                        2
+M2      4                        3 Sel
+                   Counter0_3        2
+     ScanCLK
+     ?
+                         Count                                    4   Digit[3:0]
+
+===== PAGE 10 =====
+2 Layer (Option 2.1 updated)
+       nd
+      TheClock
+                 ClockHH_MM                  Display
+                                         4
+                               Hour10        H1
+                                         4                     7
+                               Hour1         H2        Data        Segment[a:g]
+CLK              CLK_1Sec
+                              Minute10   4   M1
+                                                               4
+                                         4             Digit       Common[3:0]
+                              Minute1        M2
+                                  ?          ScanCLK
+?
+
+===== PAGE 11 =====
+3 Layer (Display)
+                                  rd
+               Display
+                                                         BCDto7Seg
+H1      4                            0
+H2     4                             1
+                                             Y   4        BCD   Segments
+                                                                           7   Data[6:0]
+M1      4                            2
+M2      4                            3 Sel
+                   Counter0_3            2               Decoder2_4
+     ScanCLK             Count   2                   2                     4
+                                                         In        Out         Digit[3:0]
+
+===== PAGE 12 =====
+2 Layer (Option 2.1)
+            nd
+      TheClock
+                 ClockHH_MM                  Display
+                                         4
+                               Hour10        H1
+                                         4                     7
+                               Hour1         H2        Data        Segment[a:g]
+CLK              CLK_1Sec
+                              Minute10   4   M1
+                                                               4
+                                         4             Digit       Common[3:0]
+                              Minute1        M2
+
+===== PAGE 13 =====
+3 Layer (ClockHH_MM)
+                rd
+           ClockHH_MM
+                                                                 4
+                                                                     Hour10
+             Counter0_9   Counter0_5   Counter0_9   Counter0_2   4
+                                                                     Hour1
+                 TC           TC           TC           TC
+CLK_1Sec       M2           M1           H2           H1         4
+               Count        Count        Count        Count          Minute10
+                                                                 4   Minute1
+
+===== PAGE 14 =====
+3 Layer (ClockHH_MM)
+                rd
+           ClockHH_MM
+                                                                   4
+                                                                       Hour10
+             Counter0_9   Counter0_5    Counter0_9   Counter0_2    4
+                                                                       Hour1
+                 TC           TC            TC           TC
+CLK_1Sec       M2           M1            H2           H1
+               Count        Count         Count        Count   ?   4   Minute10
+                                    ?                              4   Minute1
+
+===== PAGE 15 =====
+3 Layer (ClockHH_MM)
+                rd
+           ClockHH_MM
+                                                                  “00”   2 Hour10[3:2]
+                                                                            Hour10[1:0]   4
+                                                                                              Hour10
+             Counter0_9   Counter0_5       Counter0_9     Counter0_2                      4
+                                                                                              Hour1
+                 TC           TC                  TC          TC
+CLK_1Sec       M2           M1                  H2          H1                            4
+               Count 4      Count 3             Count 4     Count 2                           Minute10
+                                                                                          4
+                                         Minute10[3]                                          Minute1
+                                       ‘0’
+                                       Minute10[2:0]
+
+===== PAGE 16 =====
+2 Layer (Option 2.11)
+                nd
+            TheClock
+                       ClockHH_MM                      Display
+                                                   4
+                                         Hour10        H1
+               Div1M                               4                     7
+CLK(1MHz)                                 Hour1        H2        Data        Segment[a:g]
+                In     Out        CLK_1Sec
+                                        Minute10   4   M1
+                                                                         4
+                                                   4             Digit       Common[3:0]
+                                        Minute1        M2
+                         Div??                         ScanCLK
+                             In   Out
+
+===== PAGE 17 =====
+Top Layer
+TheClock
+                                 7
+CLK(1MHz)         Segment[a:g]
+                 Common[3:0] 4
+
+===== PAGE 18 =====
+2 Layer (Option 2.11)
+                nd
+            TheClock
+                       ClockHH_MM                      Display
+                                                   4
+                                         Hour10        H1
+               Div1M                               4                     7
+CLK(1MHz)                                 Hour1        H2        Data        Segment[a:g]
+                In     Out        CLK_1Sec
+                                        Minute10   4   M1
+                                                                         4
+                                                   4             Digit       Common[3:0]
+                                        Minute1        M2
+                         Div??                         ScanCLK
+                             In   Out
+
+===== PAGE 19 =====
+All Layer (Option 2.11)
+TheClock
+
+===== PAGE 20 =====
+Add-on features
+- Show Second
+
+===== PAGE 21 =====
+Add-on features
+- Show Second
+- Set Time
+
+===== PAGE 22 =====
+Add-on features
+- Show Second
+- Set Time
+- Alarm Clock
+
+===== PAGE 23 =====
+Add-on features
+- Show Second
+- Set Time
+- Alarm Clock
+- Snooze
+
+===== PAGE 24 =====
+
+
+===== PAGE 25 =====
+
+
+===== PAGE 26 =====
+
+
+===== PAGE 27 =====
+
+
+===== PAGE 28 =====
