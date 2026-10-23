@@ -18,6 +18,7 @@
 | `gen_sft2.py`, `appcall.py`, `mcpcli.py` | ตัว generate ชุดข้อมูล (ยิงผ่านแอปจริง) |
 | `vhdl_families.py` | family `vhdl`, `vhdl_fix`, `vhdl_sem` — บล็อก VHDL (เพิ่มเข้า `gen_sft2.py`) |
 | `serve_app.js` | เปิดแอปส่วนตัว (launcher + editor ใน Chromium headless) บน Linux / CI ให้ `gen_sft2.py` ยิงผ่าน `FE_APP_ENV` |
+| `make_replay.py` → `replay_sft1.jsonl.gz` | ข้อมูล SFT1 เดิม (`../data/train.jsonl.gz`) แปลงเป็นรูปแบบนี้ไว้ผสม 30–50 % |
 | `vhdl_check.js` | compile + จำลอง VHDL ที่โมเดลเขียนด้วยตัวจำลองของแอป (เคส eval VHDL) |
 | `render_check.py` | ตรวจว่าทุกแถว render กับ template ได้ และ mask ถูก |
 

@@ -11,6 +11,14 @@
 - eval เพิ่ม 5 เคส VHDL (`vhdl_rom`, `vhdl_stop`, `vhdl_fix_error`, `vhdl_verify_after`, `no_vhdl_for_part`) — โค้ดที่โมเดลเขียนถูก compile + จำลองด้วย `vhdl_check.js` (ต้องมี node)
 - ⚠ GGUF ที่จะวัดต้องเสิร์ฟผ่านแอปเวอร์ชันที่มี `vhdl_block` (ไม่งั้น prompt / tools ไม่ตรงกับตอนเทรน)
 - คำสั่งเทรนเหมือนเดิม เปลี่ยนไฟล์ข้อมูลเป็น `sft2_v2.jsonl` (gunzip ก่อน)
+- **replay มีแล้ว: `replay_sft1.jsonl.gz`** (628 แถว ≈ 42 % ของ mix) สร้างด้วย `make_replay.py` จาก `../data/train.jsonl.gz`
+  (ชุดที่เทรน SFT1) — arguments เป็น dict, `train:false` → `weight:0`, system prompt ของ agent เปลี่ยนเป็นตัวใหม่,
+  ตัด `reasoning_content` (แอปปิด thinking), แถว agent แยกเป็นหนึ่งแถวต่อ user message (template ตัด <think> ของ
+  turn ก่อน user ล่าสุด ถ้าไม่แยก `train_sft2.py` จะฟ้อง prefix-stable) · render 628/628 prefix คงที่
+  ```
+  gunzip -k sft2_v2.jsonl.gz replay_sft1.jsonl.gz
+  python train_sft2.py --model_path <SFT1-hf> --data sft2_v2.jsonl replay_sft1.jsonl --output_dir out/sft2 --qlora --max_length 16384 --epochs 2 --lr 1e-4
+  ```
 
 ## สถานะเดิม (2026-10-23)
 - ✅ วัด baseline SFT1 แล้ว: **41%** (12 เคส, temp 0.3, thinking off = ค่าในแอป) → `eval_runs/eval_sft1_base.jsonl`
