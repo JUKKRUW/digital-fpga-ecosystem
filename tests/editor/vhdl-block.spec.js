@@ -22,31 +22,32 @@ architecture b of twox8 is begin
   big <= '1' when unsigned(x) > 9 else '0';
 end;`;
 
-async function wire(page, sheet, vhdl, ins, outs) {
-  return page.evaluate(async ({ sheet, vhdl, ins, outs }) => {
-    const r = MCP_OPS.vhdl_block({ vhdl, sheet, label: "u1" });
-    for (const [n, w] of ins) MCP_OPS.add_component({ sheet, type: "IN", name: n, params: w > 1 ? { name: n, width: w } : { name: n } });
-    for (const [n, w] of outs) MCP_OPS.add_component({ sheet, type: "OUT", name: n, params: w > 1 ? { name: n, width: w } : { name: n } });
-    MCP_OPS.connect({ sheet, connections: [...ins.map(([n]) => [n, "u1." + n]), ...outs.map(([n]) => ["u1." + n, n])] });
-    return r;
-  }, { sheet, vhdl, ins, outs });
+async function wire(page, sheet, vhdl) {
+  return page.evaluate(({ sheet, vhdl }) => MCP_OPS.vhdl_block({ vhdl, sheet }), { sheet, vhdl });
 }
 
 test("a clocked VHDL block: placed, wired, simulated clock by clock, emitted into the VHDL", async ({ page }) => {
   await openEditor(page);
-  await page.evaluate(() => MCP_OPS.new_sheet ? MCP_OPS.new_sheet({ name: "c3" }) : null);
-  const r = await wire(page, "c3", COUNT3, [["clk", 1], ["en", 1], ["clr", 1]], [["q", 7]]);
+  const r = await wire(page, "c3", COUNT3);
   expect(r.name).toBe("count3");
   expect(r.sequential).toBe(true);
   expect(r.ports.map(p => p.name + p.dir + p.width)).toEqual(["clkin1", "enin1", "clrin1", "qout7"]);
-  const out = await page.evaluate(() => {
+  const out = await page.evaluate(COUNT3_TEXT => {
     const s = MCP_OPS.simulate({ sheet: "c3", cycles: 6, vectors: [{ en: 1 }, { en: 1 }, { en: 0 }, { en: 1 }, { en: 1, clr: 1 }, { en: 1 }] });
     state.project.topId = Object.values(state.project.schematics).find(x => x.name === "c3").id;
     const v = MCP_OPS.get_vhdl({});
     const chk = MCP_OPS.check ? MCP_OPS.check({ sheet: "c3" }) : null;
-    return { q: s.rows.map(x => parseInt(x.outputs.q, 2)), note: s.note || "", vhdl: v.vhdl, errs: chk && (chk.errors || []).length };
-  });
+    let same = ""; try { MCP_OPS.vhdl_block({ vhdl: COUNT3_TEXT, sheet: "count3" }); } catch (e) { same = e.message; }
+    let busy = ""; try { MCP_OPS.vhdl_block({ vhdl: COUNT3_TEXT, sheet: "c3" }); } catch (e) { busy = e.message; }
+    return { q: s.rows.map(x => parseInt(x.outputs.q, 2)), note: s.note || "", vhdl: v.vhdl, errs: chk && (chk.errors || []).length,
+      firstKeys: Object.keys(s).slice(0, 4), sum: s.summary, ports: MCP_OPS.get_sheet({ sheet: "c3" }).ports.map(p => p.name), same, busy };
+  }, COUNT3);
   expect(out.q).toEqual([0, 3, 6, 6, 9, 0]);
+  expect(out.ports).toEqual(["clk", "en", "clr", "q"]);
+  expect(out.firstKeys).toEqual(["sheet", "kind", "clocks", "summary"]);
+  expect(out.sum.q.values).toEqual([0, 3, 6, 9]);
+  expect(out.same).toMatch(/same name as entity/);
+  expect(out.busy).toMatch(/already has parts/);
   expect(out.note).not.toMatch(/บล็อก VHDL/);
   expect(out.vhdl).toContain("entity count3 is");
   expect(out.vhdl).toMatch(/: count3\s+port map/i);
@@ -54,8 +55,7 @@ test("a clocked VHDL block: placed, wired, simulated clock by clock, emitted int
 
 test("a combinational VHDL block: truth table, compare against a formula, errors with the line", async ({ page }) => {
   await openEditor(page);
-  await page.evaluate(() => MCP_OPS.new_sheet ? MCP_OPS.new_sheet({ name: "rx" }) : null);
-  await wire(page, "rx", ROM, [["x", 4]], [["y", 6], ["big", 1]]);
+  await wire(page, "rx", ROM);
   const r = await page.evaluate(() => {
     const t = clientCombSim(Object.values(state.project.schematics).find(s => s.name === "rx"));
     const val = (bits, from, n) => parseInt(bits.slice(from, from + n).join(""), 2);
@@ -93,7 +93,7 @@ test("upper-case ports clocked from an INPUT not named clk, next to a D flip-flo
   await openEditor(page);
   const r = await page.evaluate(() => {
     MCP_OPS.new_sheet({ name: "mix" });
-    MCP_OPS.vhdl_block({ sheet: "mix", label: "t", vhdl: `library IEEE; use IEEE.STD_LOGIC_1164.ALL;
+    MCP_OPS.vhdl_block({ sheet: "mix", label: "t", ports: false, vhdl: `library IEEE; use IEEE.STD_LOGIC_1164.ALL;
 entity TOG is Port ( CLK : in STD_LOGIC; Q : out STD_LOGIC ); end TOG;
 architecture B of TOG is signal s : std_logic := '0'; begin
   process(CLK) begin if CLK'event and CLK = '1' then s <= not s; end if; end process; Q <= s; end B;` });

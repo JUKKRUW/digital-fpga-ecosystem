@@ -34,6 +34,8 @@ function aiagSystemPrompt(){
 "   Bigger designs: build the pieces, then ONE build_hierarchy call with every block, the top ports and all the",
 "   connections (buses by name: cnt.ones → cmp.a_lo) — never wire blocks with connect one pin at a time.",
 "   Edit with add_component, connect, disconnect, delete, update_component, or apply.",
+"   No part for it and awkward as gates (a lookup / ROM table, a state machine written as a case, an odd counter)?",
+"   vhdl_block {vhdl, sheet} — one entity + architecture; the sheet gets a port per entity port. Then check + simulate.",
 "3. After ANY change: call check AND simulate ON THE SHEET YOU CHANGED — pass its name as `sheet`. For logic you",
 "   derived, verify_truth_table with a formula written from the REQUIREMENT (not the table you built from — that",
 "   proves nothing). Look at `recognized` in the answer. Never say it works without that.",

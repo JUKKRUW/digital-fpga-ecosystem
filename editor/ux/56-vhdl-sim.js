@@ -237,7 +237,7 @@ const VH_MAXW=32;
 const vhMask=w=>w>=32?0xFFFFFFFF:((1<<w)>>>0)-1;
 const vhSL=v=>({k:"sl", v:v?1:0}), vhInt=v=>({k:"int", v:Math.trunc(v)}), vhBool=v=>({k:"bool", v:!!v});
 function vhVec(v, w, s, r){ v=Number(v); const m=vhMask(w); const x=((v%4294967296)+4294967296)%4294967296; const o={k:"vec", v:(x>>>0)&m, w, s:!!s};
-  if(r){ o.hi=r.hi; o.lo=r.lo; o.asc=r.asc; } return o; }
+  if(r){ if(r.hi!=null){ o.hi=r.hi; o.lo=r.lo; o.asc=r.asc; } if(r.t) o.t=r.t; } return o; }
 function vhNum(x){        // a vec's numeric value: signed → two's complement
   if(x.k==="vec") return x.s && x.w>0 && (x.v>>>(x.w-1))&1 ? x.v-2**x.w : x.v;
   if(x.k==="sl"||x.k==="int") return x.v;
@@ -271,7 +271,7 @@ function vhCompile(src){
       const a=vhNum(ce(st.range.a)), b=vhNum(ce(st.range.b)), asc=st.range.dir==="to", hi=asc?b:a, lo=asc?a:b, w=hi-lo+1;
       if(w<1) throw vhErr(st.line||line, "ช่วงของเวกเตอร์ว่าง");
       if(w>VH_MAXW) throw vhErr(st.line||line, `ตัวจำลองรองรับเวกเตอร์ไม่เกิน ${VH_MAXW} บิต (${n} นี้ ${w} บิต)`);
-      return {kind:"vec", w, hi, lo, asc, s:n==="signed"};
+      return {kind:"vec", w, hi, lo, asc, s:n==="signed", t:n==="unsigned"?"uns":n==="signed"?"sgn":"slv"};
     }
     if(types.has(n)) return types.get(n);
     throw vhErr(st.line||line, `ไม่รู้จักชนิดข้อมูล ${n}`);
@@ -343,7 +343,10 @@ function vhFit(v, ty, line, warns){
       const bits=Math.max(1, Math.ceil(Math.log2(ty.hi+1))); return vhInt(((v.v%2**bits)+2**bits)%2**bits); }
     return v; }
   if(ty.kind==="vec"){
-    if(v.k==="vec"){ if(v.w!==ty.w) throw vhErr(line, `ความกว้างไม่ตรง: ด้านซ้าย ${ty.w} บิต, ด้านขวา ${v.w} บิต`); return vhVec(v.v, ty.w, ty.s, ty); }
+    if(v.k==="vec"){ if(v.w!==ty.w) throw vhErr(line, `ความกว้างไม่ตรง: ด้านซ้าย ${ty.w} บิต, ด้านขวา ${v.w} บิต`);
+      if(v.t && ty.t && v.t!==ty.t){ const N={slv:"std_logic_vector", uns:"unsigned", sgn:"signed"};
+        throw vhErr(line, `ชนิดไม่ตรง: ด้านขวาเป็น ${N[v.t]} แต่ด้านซ้ายเป็น ${N[ty.t]} — แปลงด้วย ${N[ty.t]}(…)`); }
+      return vhVec(v.v, ty.w, ty.s, ty); }
     if(v.k==="sl" && ty.w===1) return vhVec(v.v, 1, ty.s, ty);
     throw vhErr(line, v.k==="int" ? `กำหนดจำนวนเต็มให้เวกเตอร์ ${ty.w} บิตตรงๆ ไม่ได้ — ใช้ std_logic_vector(to_unsigned(x, ${ty.w}))` : `ต้องเป็นเวกเตอร์ ${ty.w} บิต`); }
   if(ty.kind==="enum"){ if(v.k==="enum" && ty.lits.includes(v.v)) return v; throw vhErr(line, `ค่าต้องเป็นหนึ่งใน ${ty.lits.join(", ")}`); }
@@ -375,9 +378,9 @@ function vhEval(e, C){
     case "agg": return vhAgg(e, C, want);
     case "un": { const a=vhEval(e.a, C);
       if(e.op==="not"){ if(a.k==="sl") return vhSL(1-a.v); if(a.k==="bool") return vhBool(!a.v); if(a.k==="vec") return Object.assign({}, a, {v:(~a.v)&vhMask(a.w)}); throw vhErr(line, "not ใช้กับบิต / เวกเตอร์ / เงื่อนไข"); }
-      if(e.op==="-"){ if(a.k==="int") return vhInt(-a.v); if(a.k==="vec") return vhVec(-vhNum(a), a.w, a.s); }
+      if(e.op==="-"){ if(a.k==="int") return vhInt(-a.v); if(a.k==="vec") return vhVec(-vhNum(a), a.w, a.s, {t:a.t}); }
       if(e.op==="+") return a;
-      if(e.op==="abs") return a.k==="int" ? vhInt(Math.abs(a.v)) : vhVec(Math.abs(vhNum(a)), a.w, a.s);
+      if(e.op==="abs") return a.k==="int" ? vhInt(Math.abs(a.v)) : vhVec(Math.abs(vhNum(a)), a.w, a.s, {t:a.t});
       throw vhErr(line, "ใช้ "+e.op+" กับค่านี้ไม่ได้"); }
     case "bin": return vhBin(e, C, want);
     case "attr": {
@@ -464,7 +467,8 @@ function vhBin(e, C, want){
   if(a.k==="vec"||b.k==="vec"){
     const w = op==="*" ? (a.k==="vec"&&b.k==="vec" ? a.w+b.w : 2*(a.k==="vec"?a.w:b.w)) : Math.max(a.k==="vec"?a.w:0, b.k==="vec"?b.w:0);
     if(w>VH_MAXW) throw vhErr(line, "ผลคูณกว้างเกิน 32 บิต");
-    return vhVec(r, w, (a.k==="vec"&&a.s)||(b.k==="vec"&&b.s));
+    const fam=[a,b].map(x=>x.k==="vec"?x.t:null), t=fam.find(f=>f==="uns"||f==="sgn")||fam.find(f=>f==="slv");
+    return vhVec(r, w, (a.k==="vec"&&a.s)||(b.k==="vec"&&b.s), {t});
   }
   return vhInt(r);
 }
@@ -479,7 +483,7 @@ function vhCall(e, C, want){
     const r=A[0];
     if(r.t==="range"){ if(x.k!=="vec") throw vhErr(line, "ตัด (slice) ได้เฉพาะเวกเตอร์");
       const i=vhNum(vhEval(r.a, C)), j=vhNum(vhEval(r.b, C)), p1=vhPos(x, i, line), p2=vhPos(x, j, line), lo=Math.min(p1,p2), w=Math.abs(p1-p2)+1;
-      return vhVec((x.v>>>lo)&vhMask(w), w, x.s, {hi:Math.max(i,j), lo:Math.min(i,j), asc:r.dir==="to"}); }
+      return vhVec((x.v>>>lo)&vhMask(w), w, x.s, {hi:Math.max(i,j), lo:Math.min(i,j), asc:r.dir==="to", t:x.t}); }
     const i=vhNum(vhEval(r, C));
     if(x.k==="vec") return vhSL((x.v>>>vhPos(x, i, line))&1);
     if(x.k==="arr"){ if(i<x.lo||i>x.hi) throw vhErr(line, `ดัชนี ${i} อยู่นอกตาราง (${x.lo} to ${x.hi})`); return x.a[x.asc?i-x.lo:x.hi-i]; }
@@ -492,10 +496,10 @@ function vhCall(e, C, want){
       return vhInt(vhNum(x)); }
     case "unsigned": case "signed": case "std_logic_vector": case "std_ulogic_vector": case "bit_vector": {
       const x=arg(0, want); if(x.k!=="vec") throw vhErr(line, `${f}(…) แปลงได้เฉพาะเวกเตอร์ — จำนวนเต็มใช้ to_unsigned(x, n)`);
-      return Object.assign({}, x, {s:f==="signed"}); }
+      return Object.assign({}, x, {s:f==="signed", t:f==="unsigned"?"uns":f==="signed"?"sgn":"slv"}); }
     case "to_unsigned": case "to_signed": case "conv_std_logic_vector": { const x=arg(0), n=vhNum(arg(1));
-      if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, f==="to_signed"); }
-    case "resize": { const x=arg(0), n=vhNum(arg(1)); if(x.k!=="vec") throw vhErr(line, "resize รับเวกเตอร์"); if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, x.s); }
+      if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, f==="to_signed", {t:f==="to_unsigned"?"uns":f==="to_signed"?"sgn":"slv"}); }
+    case "resize": { const x=arg(0), n=vhNum(arg(1)); if(x.k!=="vec") throw vhErr(line, "resize รับเวกเตอร์"); if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, x.s, {t:x.t}); }
     case "shift_left": case "shift_right": case "rotate_left": case "rotate_right": {
       const x=arg(0), n=vhNum(arg(1)); if(x.k!=="vec") throw vhErr(line, f+" รับเวกเตอร์");
       const op={shift_left:"sll", shift_right:x.s?"sra":"srl", rotate_left:"rol", rotate_right:"ror"}[f];
@@ -580,7 +584,7 @@ function vhAssign(tg, base, ty, C, line, warns, rhs){
     const R=Object.assign({}, ty);
     if(r.t==="range"){
       const i=vhNum(vhEval(r.a, C)), j=vhNum(vhEval(r.b, C)), p1=vhPos(R, i, line), p2=vhPos(R, j, line), lo=Math.min(p1,p2), w=Math.abs(p1-p2)+1;
-      const v=vhFit(vhEval(rhs, Object.assign({}, C, {want:{kind:"vec", w, s:ty.s}})), {kind:"vec", w, hi:w-1, lo:0}, line, warns);
+      const v=vhFit(vhEval(rhs, Object.assign({}, C, {want:{kind:"vec", w, s:ty.s}})), {kind:"vec", w, hi:w-1, lo:0, t:ty.t}, line, warns);
       const m=(vhMask(w)*2**lo)>>>0;
       return vhVec(((base.v & ~m)>>>0) | ((v.v*2**lo)>>>0), ty.w, ty.s, ty);
     }

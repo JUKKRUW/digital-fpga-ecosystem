@@ -133,10 +133,25 @@ function vhdlBlockCheck(text){
   const r=vhdlCompileCached(String(text||""));
   if(r.error){ const e=new Error(r.error); e.line=r.line; throw e; }
   const M=r.M, name=M.raw;
+  vhdlSmoke(M);
   if(sanId(name)!==name.toLowerCase()) throw new Error(`ชื่อ entity '${name}' ใช้ไม่ได้ (เป็นคำสงวนของ VHDL หรือมีตัวอักษรพิเศษ) — เปลี่ยนชื่อ entity`);
   const clash=Object.values(state.project.schematics).find(s=>sanId(s.name)===sanId(name));
   if(clash) throw new Error(`ชื่อ entity '${name}' ซ้ำกับแผ่น '${clash.name}' — VHDL จะมี entity ชื่อเดียวกันสองตัว เปลี่ยนชื่อ entity`);
   return {M, name, ports:M.ports.map(p=>({name:p.raw, dir:p.dir, width:p.width}))};
+}
+/* a short run before it is saved: most type errors (widths, an integer into a vector, a std_logic
+   used as a condition) only show when a line runs — found here, they come back with the line instead
+   of turning up later as a note under a simulation */
+function vhdlSmoke(M){
+  const ins=M.ports.filter(p=>p.dir==="in"), clk=new Set(M.clockPorts);
+  let seed=7; const rnd=()=>(seed=(Math.imul(seed,1103515245)+12345)>>>0);
+  const vec=(all)=>Object.fromEntries(ins.map(p=>[p.name, clk.has(p.name)?0:(all==null?rnd():all)&((2**p.width)-1)]));
+  let st=vhInitState(M), prev=null;
+  const go=v=>{ st=vhRun(M, st, v, prev); prev=v; };
+  try{
+    [vec(0), vec(0xFFFFFFFF)].forEach(go);
+    for(let i=0;i<24;i++){ const v=vec(); go(v); if(clk.size){ const hi=Object.assign({}, v); clk.forEach(n=>hi[n]=1); go(hi); } }
+  }catch(e){ const x=new Error(e.message); x.line=e.line; throw x; }
 }
 /* save the text as a VHDL block (new, or replacing `old`); returns the block's name */
 function vhdlBlockSave(text, old){
@@ -254,19 +269,54 @@ GENERATORS.push({id:"vhdl_block", icon:"⌨", name:"บล็อก VHDL (เข
 }
 
 /* ---------- MCP ---------- */
+/* sheet:'x' (the agent's way): the sheet becomes this block with an INPUT / OUTPUT per port, wired —
+   a normal sheet, so it simulates on its own and goes into build_hierarchy as {sheet:'x'}.
+   ports:false only places the block on that sheet. */
+function vhdlWrapSheet(sch, name, label){
+  const cc=state.project.customs[name], td=customTypeDef(cc), pins=td.ports({}), sz=td.size({});
+  const blk={id:uid("c"), type:"CUSTOM:"+name, x:snap(330), y:snap(110), params:{}, label:label||""};
+  sch.components.push(blk);
+  const mk=(type, p)=>{ const params=Object.assign(JSON.parse(JSON.stringify((TYPES[type]&&TYPES[type].defaultParams)||{})), {name:p.label||p.id}, p.width>1?{width:p.width}:{});
+    const own=TYPES[type].ports(params).find(q=>q.dir===(type==="IN"?"out":"in"));
+    const c={id:uid("c"), type, params, label:"", x:type==="IN" ? blk.x-snap(200) : blk.x+sz.w+snap(120), y:snap(blk.y+p.dy-(own?own.dy:0))};
+    sch.components.push(c); return {c, pid:own?own.id:(type==="IN"?"o":"i")}; };
+  const made=[];
+  pins.forEach(p=>{ const io=mk(p.dir==="in"?"IN":"OUT", p);
+    const w=p.dir==="in" ? {id:uid("w"), from:{cid:io.c.id, pid:io.pid}, to:{cid:blk.id, pid:p.id}, name:""}
+                         : {id:uid("w"), from:{cid:blk.id, pid:p.id}, to:{cid:io.c.id, pid:io.pid}, name:""};
+    sch.wires.push(w); made.push(w); });
+  sch.portOrder={in:pins.filter(p=>p.dir==="in").map(p=>p.label||p.id), out:pins.filter(p=>p.dir==="out").map(p=>p.label||p.id)};
+  return {blk, wires:made};
+}
 MCP_OPS.vhdl_block = a=>{
   const text=String(a.vhdl||"");
   if(!text.trim()) mcpFail("vhdl is required: one entity + its architecture", "ports: std_logic / std_logic_vector / unsigned / signed");
-  let k; try{ k=vhdlBlockCheck(text); }catch(e){ mcpFail("VHDL: "+e.message, "fix the text and call again (the block was not saved)"); }
-  const old=a.replace||((state.project.customs||{})[k.name] ? k.name : null);
+  let k; try{ k=vhdlBlockCheck(text); }catch(e){ mcpFail("VHDL: "+e.message, "fix the text and call again (nothing was saved)"); }
+  const P=state.project.schematics, want=a.sheet!=null ? String(a.sheet).trim() : "";
+  const wrap=!!want && a.ports!==false;
+  let tgt=want ? Object.values(P).find(s=>String(s.name).toLowerCase()===want.toLowerCase()) : null;
+  if(wrap){
+    if(sanId(want)===sanId(k.name)) mcpFail(`sheet '${want}' has the same name as entity '${k.name}' — the design would have two entities with that name`, `give the sheet another name, e.g. '${want}_top'`);
+    if(tgt && tgt.components.some(c=>c.type!=="JUNCTION") && !a.replace)
+      mcpFail(`sheet '${tgt.name}' already has parts`, "replace:true rebuilds it (one undo brings it back), or give a new sheet name");
+  } else if(want && !tgt) mcpFail(`sheet '${want}' not found`, "with ports:false the sheet must exist; leave ports out to make the sheet from the block");
+  const old=a.replace && typeof a.replace==="string" ? a.replace : ((state.project.customs||{})[k.name] ? k.name : null);
   mcpBeforeChange("บล็อก VHDL "+k.name);
   let r; try{ r=vhdlBlockSave(text, old); }catch(e){ mcpFail(e.message); }
   let placed=null;
-  if(a.sheet){ const sch=mcpUse(a.sheet); const c=vhdlBlockPlace(r.name, sch, a.x!=null&&a.y!=null?{x:snap(a.x), y:snap(a.y)}:null);
-    if(a.label) c.label=String(a.label); placed={sheet:sch.name, id:c.id, label:c.label||null}; mcpCommit(sch); }
+  if(wrap){
+    if(!tgt){ const id=uid("sch"); P[id]=blankSchematic(id, uniqueSchName(want, id)); tgt=P[id]; }
+    else { tgt.components=[]; tgt.wires=[]; delete tgt.verified; delete tgt.spec; }
+    openSchTab(tgt.id);
+    const w=vhdlWrapSheet(tgt, r.name, a.label);
+    placed={sheet:tgt.name, block:w.blk.label||w.blk.id, ports:r.ports.map(p=>p.width>1?`${p.dir} ${p.name}[${p.width-1}:0]`:`${p.dir} ${p.name}`)};
+    mcpCommit(tgt, {routeWires:w.wires});
+  } else if(want){ const sch=mcpUse(want); const c=vhdlBlockPlace(r.name, sch, a.x!=null&&a.y!=null?{x:snap(a.x), y:snap(a.y)}:null);
+    if(a.label) c.label=String(a.label); placed={sheet:sch.name, block:c.label||c.id, wired:false}; mcpCommit(sch); }
   else { snapshot(); renderAll(); }
   return Object.assign(r, {placed, type:"CUSTOM:"+r.name,
-    note:"pins = the entity's ports; place more with add_component {type:'vhdl:"+r.name+"'}; simulate / probe / compare_sheets run the VHDL in the browser"});
+    note: wrap ? `sheet '${tgt.name}' = this block with a port per entity port — next: check + simulate {sheet:'${tgt.name}'}; in a bigger design use it as a block {sheet:'${tgt.name}'}`
+               : "pins = the entity's ports; place more with add_component {type:'vhdl:"+r.name+"'}; simulate / probe run the VHDL in the browser"});
 };
 {
   const _add=MCP_OPS.add_component;

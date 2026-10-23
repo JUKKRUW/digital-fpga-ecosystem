@@ -17436,6 +17436,8 @@ function aiagSystemPrompt(){
 "   Bigger designs: build the pieces, then ONE build_hierarchy call with every block, the top ports and all the",
 "   connections (buses by name: cnt.ones → cmp.a_lo) — never wire blocks with connect one pin at a time.",
 "   Edit with add_component, connect, disconnect, delete, update_component, or apply.",
+"   No part for it and awkward as gates (a lookup / ROM table, a state machine written as a case, an odd counter)?",
+"   vhdl_block {vhdl, sheet} — one entity + architecture; the sheet gets a port per entity port. Then check + simulate.",
 "3. After ANY change: call check AND simulate ON THE SHEET YOU CHANGED — pass its name as `sheet`. For logic you",
 "   derived, verify_truth_table with a formula written from the REQUIREMENT (not the table you built from — that",
 "   proves nothing). Look at `recognized` in the answer. Never say it works without that.",
@@ -21457,6 +21459,27 @@ function sdWaveform(rowsVals, G){
       return one ? (x?"▔":"▁").repeat(w) : String(x).padStart(w); }).join("")); });
   return lines;
 }
+/* per output: how often it changes, its period once it repeats, the share of clocks at 1 (1-bit),
+   the values in order of first appearance and the first clocks — what a question about a counter /
+   divider needs, without reading every row */
+function sdSummary(vals, names){
+  const S={};
+  names.forEach(n=>{
+    const v=vals.map(x=>x[n]); if(!v.length) return;
+    let changes=0; for(let i=1;i<v.length;i++) if(v[i]!==v[i-1]) changes++;
+    let period=null;
+    const from=Math.floor(v.length/4);                    // allow a start-up stretch
+    for(let p=1; p<=Math.floor((v.length-from)/2) && period==null; p++){
+      let ok=true; for(let i=from;i+p<v.length;i++) if(v[i]!==v[i+p]){ ok=false; break; }
+      if(ok && v.slice(from).some(x=>x!==v[from])) period=p; }
+    const seen=[]; v.forEach(x=>{ if(!seen.includes(x) && seen.length<32) seen.push(x); });
+    const o={changes, period, last:v[v.length-1]};
+    if(seen.every(x=>x===0||x===1)) o.high=+(v.filter(x=>x===1).length/v.length).toFixed(3);
+    if(period==null && !changes) o.constant=v[0];
+    o.values=seen; o.first=v.slice(0,24);
+    S[n]=o; });
+  return S;
+}
 {
   const _sim=MCP_OPS.simulate;
   MCP_OPS.simulate=a=>{
@@ -21474,6 +21497,12 @@ function sdWaveform(rowsVals, G){
         const Gin=typeof (r.rows[0]||{}).inputs==="string" && r.rows[0].inputs.length===ins.length ? sdGroups(ins) : [];
         r.waveform=sdWaveform(vals.slice(0, 64), [...Gin, ...G]);
         r.note=(r.note?r.note+" · ":"")+"values = every port as one number per clock (q0..qn → q); waveform = the same, drawn";
+        // a summary per output FIRST: the agent's tool message is clipped at 6000 characters and a long
+        // run's rows filled it — a divider's period could not be confirmed (SFT2 review)
+        const summary=sdSummary(vals, G.map(g=>g.name));
+        const out={sheet:r.sheet, kind:r.kind, clocks:vals.length, summary};
+        Object.keys(r).forEach(k=>{ if(!(k in out)) out[k]=r[k]; });
+        return out;
       } else if(r.mode==="vectors"){
         r.rows.forEach(x=>{ x.values=Object.fromEntries(Object.entries(x.outputs).map(([k,v])=>[k, v&&typeof v==="object"?v.value:typeof v==="string"&&/^[01]+$/.test(v)?parseInt(v,2):v])); });
         const Gi=sdGroups(Object.keys((r.rows[0]||{}).values||{})); if(sdWide(Gi)) r.rows.forEach(x=>Object.assign(x.values, Object.fromEntries(Gi.filter(g=>g.bits.length>1).map(g=>[g.name, sdVal(g, i=>x.values[Object.keys(x.values)[i]])]))));
@@ -23377,7 +23406,7 @@ const VH_MAXW=32;
 const vhMask=w=>w>=32?0xFFFFFFFF:((1<<w)>>>0)-1;
 const vhSL=v=>({k:"sl", v:v?1:0}), vhInt=v=>({k:"int", v:Math.trunc(v)}), vhBool=v=>({k:"bool", v:!!v});
 function vhVec(v, w, s, r){ v=Number(v); const m=vhMask(w); const x=((v%4294967296)+4294967296)%4294967296; const o={k:"vec", v:(x>>>0)&m, w, s:!!s};
-  if(r){ o.hi=r.hi; o.lo=r.lo; o.asc=r.asc; } return o; }
+  if(r){ if(r.hi!=null){ o.hi=r.hi; o.lo=r.lo; o.asc=r.asc; } if(r.t) o.t=r.t; } return o; }
 function vhNum(x){        // a vec's numeric value: signed → two's complement
   if(x.k==="vec") return x.s && x.w>0 && (x.v>>>(x.w-1))&1 ? x.v-2**x.w : x.v;
   if(x.k==="sl"||x.k==="int") return x.v;
@@ -23411,7 +23440,7 @@ function vhCompile(src){
       const a=vhNum(ce(st.range.a)), b=vhNum(ce(st.range.b)), asc=st.range.dir==="to", hi=asc?b:a, lo=asc?a:b, w=hi-lo+1;
       if(w<1) throw vhErr(st.line||line, "ช่วงของเวกเตอร์ว่าง");
       if(w>VH_MAXW) throw vhErr(st.line||line, `ตัวจำลองรองรับเวกเตอร์ไม่เกิน ${VH_MAXW} บิต (${n} นี้ ${w} บิต)`);
-      return {kind:"vec", w, hi, lo, asc, s:n==="signed"};
+      return {kind:"vec", w, hi, lo, asc, s:n==="signed", t:n==="unsigned"?"uns":n==="signed"?"sgn":"slv"};
     }
     if(types.has(n)) return types.get(n);
     throw vhErr(st.line||line, `ไม่รู้จักชนิดข้อมูล ${n}`);
@@ -23483,7 +23512,10 @@ function vhFit(v, ty, line, warns){
       const bits=Math.max(1, Math.ceil(Math.log2(ty.hi+1))); return vhInt(((v.v%2**bits)+2**bits)%2**bits); }
     return v; }
   if(ty.kind==="vec"){
-    if(v.k==="vec"){ if(v.w!==ty.w) throw vhErr(line, `ความกว้างไม่ตรง: ด้านซ้าย ${ty.w} บิต, ด้านขวา ${v.w} บิต`); return vhVec(v.v, ty.w, ty.s, ty); }
+    if(v.k==="vec"){ if(v.w!==ty.w) throw vhErr(line, `ความกว้างไม่ตรง: ด้านซ้าย ${ty.w} บิต, ด้านขวา ${v.w} บิต`);
+      if(v.t && ty.t && v.t!==ty.t){ const N={slv:"std_logic_vector", uns:"unsigned", sgn:"signed"};
+        throw vhErr(line, `ชนิดไม่ตรง: ด้านขวาเป็น ${N[v.t]} แต่ด้านซ้ายเป็น ${N[ty.t]} — แปลงด้วย ${N[ty.t]}(…)`); }
+      return vhVec(v.v, ty.w, ty.s, ty); }
     if(v.k==="sl" && ty.w===1) return vhVec(v.v, 1, ty.s, ty);
     throw vhErr(line, v.k==="int" ? `กำหนดจำนวนเต็มให้เวกเตอร์ ${ty.w} บิตตรงๆ ไม่ได้ — ใช้ std_logic_vector(to_unsigned(x, ${ty.w}))` : `ต้องเป็นเวกเตอร์ ${ty.w} บิต`); }
   if(ty.kind==="enum"){ if(v.k==="enum" && ty.lits.includes(v.v)) return v; throw vhErr(line, `ค่าต้องเป็นหนึ่งใน ${ty.lits.join(", ")}`); }
@@ -23515,9 +23547,9 @@ function vhEval(e, C){
     case "agg": return vhAgg(e, C, want);
     case "un": { const a=vhEval(e.a, C);
       if(e.op==="not"){ if(a.k==="sl") return vhSL(1-a.v); if(a.k==="bool") return vhBool(!a.v); if(a.k==="vec") return Object.assign({}, a, {v:(~a.v)&vhMask(a.w)}); throw vhErr(line, "not ใช้กับบิต / เวกเตอร์ / เงื่อนไข"); }
-      if(e.op==="-"){ if(a.k==="int") return vhInt(-a.v); if(a.k==="vec") return vhVec(-vhNum(a), a.w, a.s); }
+      if(e.op==="-"){ if(a.k==="int") return vhInt(-a.v); if(a.k==="vec") return vhVec(-vhNum(a), a.w, a.s, {t:a.t}); }
       if(e.op==="+") return a;
-      if(e.op==="abs") return a.k==="int" ? vhInt(Math.abs(a.v)) : vhVec(Math.abs(vhNum(a)), a.w, a.s);
+      if(e.op==="abs") return a.k==="int" ? vhInt(Math.abs(a.v)) : vhVec(Math.abs(vhNum(a)), a.w, a.s, {t:a.t});
       throw vhErr(line, "ใช้ "+e.op+" กับค่านี้ไม่ได้"); }
     case "bin": return vhBin(e, C, want);
     case "attr": {
@@ -23604,7 +23636,8 @@ function vhBin(e, C, want){
   if(a.k==="vec"||b.k==="vec"){
     const w = op==="*" ? (a.k==="vec"&&b.k==="vec" ? a.w+b.w : 2*(a.k==="vec"?a.w:b.w)) : Math.max(a.k==="vec"?a.w:0, b.k==="vec"?b.w:0);
     if(w>VH_MAXW) throw vhErr(line, "ผลคูณกว้างเกิน 32 บิต");
-    return vhVec(r, w, (a.k==="vec"&&a.s)||(b.k==="vec"&&b.s));
+    const fam=[a,b].map(x=>x.k==="vec"?x.t:null), t=fam.find(f=>f==="uns"||f==="sgn")||fam.find(f=>f==="slv");
+    return vhVec(r, w, (a.k==="vec"&&a.s)||(b.k==="vec"&&b.s), {t});
   }
   return vhInt(r);
 }
@@ -23619,7 +23652,7 @@ function vhCall(e, C, want){
     const r=A[0];
     if(r.t==="range"){ if(x.k!=="vec") throw vhErr(line, "ตัด (slice) ได้เฉพาะเวกเตอร์");
       const i=vhNum(vhEval(r.a, C)), j=vhNum(vhEval(r.b, C)), p1=vhPos(x, i, line), p2=vhPos(x, j, line), lo=Math.min(p1,p2), w=Math.abs(p1-p2)+1;
-      return vhVec((x.v>>>lo)&vhMask(w), w, x.s, {hi:Math.max(i,j), lo:Math.min(i,j), asc:r.dir==="to"}); }
+      return vhVec((x.v>>>lo)&vhMask(w), w, x.s, {hi:Math.max(i,j), lo:Math.min(i,j), asc:r.dir==="to", t:x.t}); }
     const i=vhNum(vhEval(r, C));
     if(x.k==="vec") return vhSL((x.v>>>vhPos(x, i, line))&1);
     if(x.k==="arr"){ if(i<x.lo||i>x.hi) throw vhErr(line, `ดัชนี ${i} อยู่นอกตาราง (${x.lo} to ${x.hi})`); return x.a[x.asc?i-x.lo:x.hi-i]; }
@@ -23632,10 +23665,10 @@ function vhCall(e, C, want){
       return vhInt(vhNum(x)); }
     case "unsigned": case "signed": case "std_logic_vector": case "std_ulogic_vector": case "bit_vector": {
       const x=arg(0, want); if(x.k!=="vec") throw vhErr(line, `${f}(…) แปลงได้เฉพาะเวกเตอร์ — จำนวนเต็มใช้ to_unsigned(x, n)`);
-      return Object.assign({}, x, {s:f==="signed"}); }
+      return Object.assign({}, x, {s:f==="signed", t:f==="unsigned"?"uns":f==="signed"?"sgn":"slv"}); }
     case "to_unsigned": case "to_signed": case "conv_std_logic_vector": { const x=arg(0), n=vhNum(arg(1));
-      if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, f==="to_signed"); }
-    case "resize": { const x=arg(0), n=vhNum(arg(1)); if(x.k!=="vec") throw vhErr(line, "resize รับเวกเตอร์"); if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, x.s); }
+      if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, f==="to_signed", {t:f==="to_unsigned"?"uns":f==="to_signed"?"sgn":"slv"}); }
+    case "resize": { const x=arg(0), n=vhNum(arg(1)); if(x.k!=="vec") throw vhErr(line, "resize รับเวกเตอร์"); if(n<1||n>VH_MAXW) throw vhErr(line, "ขนาดต้องอยู่ระหว่าง 1 ถึง 32"); return vhVec(vhNum(x), n, x.s, {t:x.t}); }
     case "shift_left": case "shift_right": case "rotate_left": case "rotate_right": {
       const x=arg(0), n=vhNum(arg(1)); if(x.k!=="vec") throw vhErr(line, f+" รับเวกเตอร์");
       const op={shift_left:"sll", shift_right:x.s?"sra":"srl", rotate_left:"rol", rotate_right:"ror"}[f];
@@ -23720,7 +23753,7 @@ function vhAssign(tg, base, ty, C, line, warns, rhs){
     const R=Object.assign({}, ty);
     if(r.t==="range"){
       const i=vhNum(vhEval(r.a, C)), j=vhNum(vhEval(r.b, C)), p1=vhPos(R, i, line), p2=vhPos(R, j, line), lo=Math.min(p1,p2), w=Math.abs(p1-p2)+1;
-      const v=vhFit(vhEval(rhs, Object.assign({}, C, {want:{kind:"vec", w, s:ty.s}})), {kind:"vec", w, hi:w-1, lo:0}, line, warns);
+      const v=vhFit(vhEval(rhs, Object.assign({}, C, {want:{kind:"vec", w, s:ty.s}})), {kind:"vec", w, hi:w-1, lo:0, t:ty.t}, line, warns);
       const m=(vhMask(w)*2**lo)>>>0;
       return vhVec(((base.v & ~m)>>>0) | ((v.v*2**lo)>>>0), ty.w, ty.s, ty);
     }
@@ -23873,10 +23906,25 @@ function vhdlBlockCheck(text){
   const r=vhdlCompileCached(String(text||""));
   if(r.error){ const e=new Error(r.error); e.line=r.line; throw e; }
   const M=r.M, name=M.raw;
+  vhdlSmoke(M);
   if(sanId(name)!==name.toLowerCase()) throw new Error(`ชื่อ entity '${name}' ใช้ไม่ได้ (เป็นคำสงวนของ VHDL หรือมีตัวอักษรพิเศษ) — เปลี่ยนชื่อ entity`);
   const clash=Object.values(state.project.schematics).find(s=>sanId(s.name)===sanId(name));
   if(clash) throw new Error(`ชื่อ entity '${name}' ซ้ำกับแผ่น '${clash.name}' — VHDL จะมี entity ชื่อเดียวกันสองตัว เปลี่ยนชื่อ entity`);
   return {M, name, ports:M.ports.map(p=>({name:p.raw, dir:p.dir, width:p.width}))};
+}
+/* a short run before it is saved: most type errors (widths, an integer into a vector, a std_logic
+   used as a condition) only show when a line runs — found here, they come back with the line instead
+   of turning up later as a note under a simulation */
+function vhdlSmoke(M){
+  const ins=M.ports.filter(p=>p.dir==="in"), clk=new Set(M.clockPorts);
+  let seed=7; const rnd=()=>(seed=(Math.imul(seed,1103515245)+12345)>>>0);
+  const vec=(all)=>Object.fromEntries(ins.map(p=>[p.name, clk.has(p.name)?0:(all==null?rnd():all)&((2**p.width)-1)]));
+  let st=vhInitState(M), prev=null;
+  const go=v=>{ st=vhRun(M, st, v, prev); prev=v; };
+  try{
+    [vec(0), vec(0xFFFFFFFF)].forEach(go);
+    for(let i=0;i<24;i++){ const v=vec(); go(v); if(clk.size){ const hi=Object.assign({}, v); clk.forEach(n=>hi[n]=1); go(hi); } }
+  }catch(e){ const x=new Error(e.message); x.line=e.line; throw x; }
 }
 /* save the text as a VHDL block (new, or replacing `old`); returns the block's name */
 function vhdlBlockSave(text, old){
@@ -23994,19 +24042,54 @@ GENERATORS.push({id:"vhdl_block", icon:"⌨", name:"บล็อก VHDL (เข
 }
 
 /* ---------- MCP ---------- */
+/* sheet:'x' (the agent's way): the sheet becomes this block with an INPUT / OUTPUT per port, wired —
+   a normal sheet, so it simulates on its own and goes into build_hierarchy as {sheet:'x'}.
+   ports:false only places the block on that sheet. */
+function vhdlWrapSheet(sch, name, label){
+  const cc=state.project.customs[name], td=customTypeDef(cc), pins=td.ports({}), sz=td.size({});
+  const blk={id:uid("c"), type:"CUSTOM:"+name, x:snap(330), y:snap(110), params:{}, label:label||""};
+  sch.components.push(blk);
+  const mk=(type, p)=>{ const params=Object.assign(JSON.parse(JSON.stringify((TYPES[type]&&TYPES[type].defaultParams)||{})), {name:p.label||p.id}, p.width>1?{width:p.width}:{});
+    const own=TYPES[type].ports(params).find(q=>q.dir===(type==="IN"?"out":"in"));
+    const c={id:uid("c"), type, params, label:"", x:type==="IN" ? blk.x-snap(200) : blk.x+sz.w+snap(120), y:snap(blk.y+p.dy-(own?own.dy:0))};
+    sch.components.push(c); return {c, pid:own?own.id:(type==="IN"?"o":"i")}; };
+  const made=[];
+  pins.forEach(p=>{ const io=mk(p.dir==="in"?"IN":"OUT", p);
+    const w=p.dir==="in" ? {id:uid("w"), from:{cid:io.c.id, pid:io.pid}, to:{cid:blk.id, pid:p.id}, name:""}
+                         : {id:uid("w"), from:{cid:blk.id, pid:p.id}, to:{cid:io.c.id, pid:io.pid}, name:""};
+    sch.wires.push(w); made.push(w); });
+  sch.portOrder={in:pins.filter(p=>p.dir==="in").map(p=>p.label||p.id), out:pins.filter(p=>p.dir==="out").map(p=>p.label||p.id)};
+  return {blk, wires:made};
+}
 MCP_OPS.vhdl_block = a=>{
   const text=String(a.vhdl||"");
   if(!text.trim()) mcpFail("vhdl is required: one entity + its architecture", "ports: std_logic / std_logic_vector / unsigned / signed");
-  let k; try{ k=vhdlBlockCheck(text); }catch(e){ mcpFail("VHDL: "+e.message, "fix the text and call again (the block was not saved)"); }
-  const old=a.replace||((state.project.customs||{})[k.name] ? k.name : null);
+  let k; try{ k=vhdlBlockCheck(text); }catch(e){ mcpFail("VHDL: "+e.message, "fix the text and call again (nothing was saved)"); }
+  const P=state.project.schematics, want=a.sheet!=null ? String(a.sheet).trim() : "";
+  const wrap=!!want && a.ports!==false;
+  let tgt=want ? Object.values(P).find(s=>String(s.name).toLowerCase()===want.toLowerCase()) : null;
+  if(wrap){
+    if(sanId(want)===sanId(k.name)) mcpFail(`sheet '${want}' has the same name as entity '${k.name}' — the design would have two entities with that name`, `give the sheet another name, e.g. '${want}_top'`);
+    if(tgt && tgt.components.some(c=>c.type!=="JUNCTION") && !a.replace)
+      mcpFail(`sheet '${tgt.name}' already has parts`, "replace:true rebuilds it (one undo brings it back), or give a new sheet name");
+  } else if(want && !tgt) mcpFail(`sheet '${want}' not found`, "with ports:false the sheet must exist; leave ports out to make the sheet from the block");
+  const old=a.replace && typeof a.replace==="string" ? a.replace : ((state.project.customs||{})[k.name] ? k.name : null);
   mcpBeforeChange("บล็อก VHDL "+k.name);
   let r; try{ r=vhdlBlockSave(text, old); }catch(e){ mcpFail(e.message); }
   let placed=null;
-  if(a.sheet){ const sch=mcpUse(a.sheet); const c=vhdlBlockPlace(r.name, sch, a.x!=null&&a.y!=null?{x:snap(a.x), y:snap(a.y)}:null);
-    if(a.label) c.label=String(a.label); placed={sheet:sch.name, id:c.id, label:c.label||null}; mcpCommit(sch); }
+  if(wrap){
+    if(!tgt){ const id=uid("sch"); P[id]=blankSchematic(id, uniqueSchName(want, id)); tgt=P[id]; }
+    else { tgt.components=[]; tgt.wires=[]; delete tgt.verified; delete tgt.spec; }
+    openSchTab(tgt.id);
+    const w=vhdlWrapSheet(tgt, r.name, a.label);
+    placed={sheet:tgt.name, block:w.blk.label||w.blk.id, ports:r.ports.map(p=>p.width>1?`${p.dir} ${p.name}[${p.width-1}:0]`:`${p.dir} ${p.name}`)};
+    mcpCommit(tgt, {routeWires:w.wires});
+  } else if(want){ const sch=mcpUse(want); const c=vhdlBlockPlace(r.name, sch, a.x!=null&&a.y!=null?{x:snap(a.x), y:snap(a.y)}:null);
+    if(a.label) c.label=String(a.label); placed={sheet:sch.name, block:c.label||c.id, wired:false}; mcpCommit(sch); }
   else { snapshot(); renderAll(); }
   return Object.assign(r, {placed, type:"CUSTOM:"+r.name,
-    note:"pins = the entity's ports; place more with add_component {type:'vhdl:"+r.name+"'}; simulate / probe / compare_sheets run the VHDL in the browser"});
+    note: wrap ? `sheet '${tgt.name}' = this block with a port per entity port — next: check + simulate {sheet:'${tgt.name}'}; in a bigger design use it as a block {sheet:'${tgt.name}'}`
+               : "pins = the entity's ports; place more with add_component {type:'vhdl:"+r.name+"'}; simulate / probe run the VHDL in the browser"});
 };
 {
   const _add=MCP_OPS.add_component;
