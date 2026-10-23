@@ -311,3 +311,9 @@
 #simPcb .pbtn.pb-mapped{border-color:#2f81f7 !important;box-shadow:0 0 0 1px #2f81f7}
 #simPcb .pbtn.pb-down{background:#ffd !important}
 #simPcb .pbtn .pb-name{position:absolute;top:33px;left:50%;transform:translateX(-50%);font-size:8px;color:#2f81f7;white-space:nowrap;pointer-events:none;font-weight:600}
+/* 57: VHDL blocks */
+.vhb-text{width:100%;height:420px;font:12.5px/1.45 ui-monospace,Consolas,monospace;background:var(--bg2,#0f1117);color:var(--ink,#e6e6e6);border:1px solid var(--line,#333);border-radius:6px;padding:8px;resize:vertical;tab-size:2;white-space:pre}
+.vhb-status{margin-top:6px;font-size:12px;min-height:18px}
+.vhb-status.ok{color:var(--ok,#3fb950)} .vhb-status.bad{color:var(--err,#f85149)}
+.vhb-sec .pt-h{display:flex;align-items:center;gap:8px} .vhb-new{margin-left:auto;font-size:11px}
+.vhb-row{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px} .vhb-row small{flex:1;color:var(--ink-dim,#999);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -162,6 +162,15 @@ TOOLS = [
       {"fsm": {"type": ["string", "object"]}, "sheet": SHEET, "name": {"type": "string"}, "state_out": {"type": "boolean"},
        "replace": {"type": "boolean", "description": "rebuild a sheet that already has parts (one undo brings it back)"}},
       ["fsm"], timeout=90),
+    T("vhdl_block", "Create or update a VHDL block: a block whose inside is VHDL text (one entity + its architecture), placed "
+      "and wired like any part; pins = the entity's ports (std_logic / std_logic_vector / unsigned / signed). The browser "
+      "simulators run the text (simulate, probe, check_spec, compare_sheets); Vivado gets it as written. Supported: signals, "
+      "constants, enum / array types (ROM tables), process with if / case / for / variables, rising_edge, when-else, "
+      "with-select, numeric_std arithmetic. Not: port map inside, wait, generate, inout, vectors > 32 bits. A block with "
+      "the same entity name is replaced in place. sheet: also place one there (add_component {type:'vhdl:<name>'} places more).",
+      {"vhdl": {"type": "string"}, "sheet": SHEET, "label": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"},
+       "replace": {"type": "string", "description": "the block to replace when the entity was renamed"}},
+      ["vhdl"]),
     T("make_report", "Write the lab report into the project folder (<project>_report.html): every sheet (top first, then its "
       "blocks) as a picture, ports, truth table + minimised equations or the first 16 clocks with a timing diagram, state "
       "diagram, acceptance test, board pin table, VHDL — and <project>_report.pdf next to it (printed by headless Edge / "

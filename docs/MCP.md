@@ -88,6 +88,8 @@ Claude ──stdio──▶ mcp_server.py ──HTTP + token──▶ launcher (
   - An expectation identical to the table the sheet was built from proves nothing. The result says so
     (`independent: false`), and it does not count as verified.
   - `recognized` names the standard circuit the sheet is.
+- **`vhdl_block`:** a block whose inside is VHDL text (one entity + architecture); pins = its ports, placed with
+  `sheet` or `add_component {type:"vhdl:<name>"}`; the browser simulators run the text, Vivado gets it as written.
 - **`build_fsm`:** a state machine from a few lines (`inputs: x`, `state S0: z=0`, `S0 -> S1 when x`, `else`,
   Mealy `/ z=1`, `reset S0`) or an object. It is built from D flip-flops, checked clock by clock against the
   diagram, and the diagram becomes the sheet's acceptance test.
