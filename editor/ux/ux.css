@@ -307,3 +307,7 @@
 /* 52: sheets that use the one on screen as a block */
 .tree-item.sch{position:relative}
 .su-dot{position:absolute;left:13px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--err,#dc2626);opacity:.45;pointer-events:auto}
+/* 55: push buttons on the simulated board */
+#simPcb .pbtn.pb-mapped{border-color:#2f81f7 !important;box-shadow:0 0 0 1px #2f81f7}
+#simPcb .pbtn.pb-down{background:#ffd !important}
+#simPcb .pbtn .pb-name{position:absolute;top:33px;left:50%;transform:translateX(-50%);font-size:8px;color:#2f81f7;white-space:nowrap;pointer-events:none;font-weight:600}

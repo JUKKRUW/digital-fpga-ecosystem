@@ -317,7 +317,8 @@ TOOLS = [
       "gated clock, floating pins, multi-driver, constant outputs, unused inputs, divider chains).", {"sheet": SHEET}),
     # --- board
     T("board_pins", "Every board target you can assign: switches sw:0-15, buttons pb:0-4, clk (50 MHz), leds led:0-15, "
-      "7-seg seg:a-g/dp, digit selects an:0-3, buzzer — with package pins."),
+      "7-seg seg:a-g/dp, digit selects an:0-3, buzzer, LCD lcd:d0-d7/rs/e (data shares pins with led 7-0), "
+      "VGA vga:hs/vs/r0-3/g0-3/b0-3, TFT, ADC/DAC (SPI), audio, uart/wifi/ble txd/rxd, ps2, header j5:5-20 — with package pins."),
     T("get_pins", "Current pin assignment of a sheet's ports (bus bits as name[i]), unassigned ports and conflicts.", {"sheet": SHEET}),
     T("set_pins", "Assign ports/bits to board targets, e.g. {\"a\":\"sw:0\", \"seg[6]\":\"seg:a\", \"clk\":\"clk\"}; null clears.",
       {"sheet": SHEET, "map": {"type": "object"}}, ["map"]),

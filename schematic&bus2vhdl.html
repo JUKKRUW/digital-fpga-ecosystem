@@ -13291,6 +13291,10 @@ init();
 /* 52: sheets that use the one on screen as a block */
 .tree-item.sch{position:relative}
 .su-dot{position:absolute;left:13px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--err,#dc2626);opacity:.45;pointer-events:auto}
+/* 55: push buttons on the simulated board */
+#simPcb .pbtn.pb-mapped{border-color:#2f81f7 !important;box-shadow:0 0 0 1px #2f81f7}
+#simPcb .pbtn.pb-down{background:#ffd !important}
+#simPcb .pbtn .pb-name{position:absolute;top:33px;left:50%;transform:translateX(-50%);font-size:8px;color:#2f81f7;white-space:nowrap;pointer-events:none;font-weight:600}
 </style>
 <script>
 "use strict";
@@ -13824,12 +13828,23 @@ const BOARD_PINS = (()=>{
   ["J13","L13","J14","J11","J12"].forEach((pin,i)=>p["pb:"+i]=pin);                 // top bottom left right center
   ["H4","H3","H2","H1"].forEach((pin,i)=>p["an:"+i]=pin);                            // digit select 0 = rightmost
   Object.entries({a:"L3",b:"P4",c:"P2",d:"M3",e:"M1",f:"J4",g:"K4",dp:"J2"}).forEach(([s,pin])=>p["seg:"+s]=pin);
+  // the rest of the board (ai/board/edge_spartan7.xdc). LCD data and the SPI TFT share their pins
+  // with LED 7…0 — the board doctor warns when two targets land on one package pin
+  ["M4","L5","P11","N11","P13","M14","M12","K12"].forEach((pin,i)=>p["lcd:d"+i]=pin);
+  Object.assign(p, {"lcd:rs":"M5", "lcd:e":"P5",
+    "tft:sck":"N11", "tft:sdi":"P13", "tft:dc":"M14", "tft:reset":"M12", "tft:cs":"K12",
+    "adc:sck":"D1", "adc:cs":"F4", "adc:din":"G4", "adc:dout":"C1", "dac:sck":"F1", "dac:cs":"D2", "dac:mosi":"E2",
+    "uart:txd":"F2", "uart:rxd":"G1", "wifi:txd":"A12", "wifi:rxd":"A10", "ble:txd":"F3", "ble:rxd":"D4",
+    "audio:l":"A13", "audio:r":"B13", "ps2:clk":"E11", "ps2:data":"C12", "vga:hs":"C4", "vga:vs":"E4"});
+  [["r",["B6","D3","C3","A4"]],["g",["A3","B3","A2","B5"]],["b",["A5","B2","B1","C5"]]].forEach(([c,L])=>L.forEach((pin,i)=>p["vga:"+c+i]=pin));
+  ["L14","M13","H14","H13","F11","G11","C14","D14","E13","F13","F14","G14","D13","D12","E12","F12"].forEach((pin,i)=>p["j5:"+(i+5)]=pin);   // 20-pin header J5, pins 5–20
   return p;
 })();
 function pinTargetLabel(t){
   if(!t) return "—";
   if(t==="clk") return "นาฬิกา 50 MHz (H11)";
   const [k,v]=t.split(":"), pin=BOARD_PINS[t]||"?";
+  if(typeof pinOptLabel==="function" && !["sw","led","pb","seg","an"].includes(k)) return pinOptLabel(t).replace(/ · (\w+)$/," ($1)");
   return ({sw:"SW",led:"LED",pb:"ปุ่ม",seg:"7SEG",an:"หลัก"}[k]||t)+" "+(v!=null?v:"")+" ("+pin+")";
 }
 /* ports that only ever mean one thing on this board */
@@ -14671,10 +14686,21 @@ function uxNudgeFree(sch, nc){
    every port of the sheet's VHDL entity — buses split into bits — and every pin the
    board has, independent of whether the sheet can be simulated.
    ========================================================================= */
-const PIN_IN_TARGETS  = [...Array.from({length:16},(_,i)=>"sw:"+i), ...Array.from({length:5},(_,i)=>"pb:"+i), "clk"];
+/* the board's targets by what they can do: in only (switches, buttons, clock, the ADC's data
+   out), out only (LEDs, 7-seg, buzzer, LCD, TFT, VGA, audio, DAC / ADC control), both (serial
+   links, PS/2, the J5 header) */
+const PIN_EXTRA_OUT=[...Array.from({length:8},(_,i)=>"lcd:d"+i), "lcd:rs", "lcd:e",
+  "tft:sck","tft:sdi","tft:dc","tft:reset","tft:cs", "vga:hs","vga:vs", ..."rgb".split("").flatMap(c=>[0,1,2,3].map(i=>"vga:"+c+i)),
+  "audio:l","audio:r", "dac:sck","dac:cs","dac:mosi", "adc:sck","adc:cs","adc:din"];
+const PIN_EXTRA_IO=["uart:txd","uart:rxd","wifi:txd","wifi:rxd","ble:txd","ble:rxd","ps2:clk","ps2:data", ...Array.from({length:16},(_,i)=>"j5:"+(i+5))];
+const PIN_IN_TARGETS  = [...Array.from({length:16},(_,i)=>"sw:"+i), ...Array.from({length:5},(_,i)=>"pb:"+i), "clk", "adc:dout", ...PIN_EXTRA_IO];
 const PIN_OUT_TARGETS = [...Array.from({length:16},(_,i)=>"led:"+i), ..."abcdefg".split("").map(s=>"seg:"+s), "seg:dp",
-                         ...Array.from({length:4},(_,i)=>"an:"+i), "buzzer"];
+                         ...Array.from({length:4},(_,i)=>"an:"+i), "buzzer", ...PIN_EXTRA_OUT, ...PIN_EXTRA_IO];
 const PB_NAMES = ["บน","ล่าง","ซ้าย","ขวา","กลาง"];
+const PIN_GROUPS = {sw:"สวิตช์", pb:"ปุ่มกด", clk:"นาฬิกา", led:"LED", seg:"7-segment", an:"7-segment", buzzer:"Buzzer / เสียง", audio:"Buzzer / เสียง",
+  lcd:"จอ LCD 16×2", tft:"จอ TFT 1.8\" (SPI)", vga:"VGA", adc:"ADC / DAC (SPI)", dac:"ADC / DAC (SPI)",
+  uart:"สื่อสาร (UART / WiFi / BLE / PS2)", wifi:"สื่อสาร (UART / WiFi / BLE / PS2)", ble:"สื่อสาร (UART / WiFi / BLE / PS2)", ps2:"สื่อสาร (UART / WiFi / BLE / PS2)",
+  j5:"ขา header J5"};
 function pinOptLabel(t){
   const pin=BOARD_PINS[t]||"?", [k,v]=t.split(":");
   if(t==="clk") return `นาฬิกา 50 MHz · ${pin}`;
@@ -14684,7 +14710,15 @@ function pinOptLabel(t){
   if(k==="seg") return `7-seg ${v==="dp"?"จุด (dp)":v} · ${pin}`;
   if(k==="an") return `เลือกหลัก ${v} · ${pin}`;
   if(t==="buzzer") return `Buzzer · ${pin}`;
-  return t;
+  if(k==="lcd") return `LCD ${v==="rs"?"RS":v==="e"?"E (enable)":"data "+v.slice(1)} · ${pin}`;
+  if(k==="j5") return `J5 ขา ${v} · ${pin}`;
+  if(k==="vga") return `VGA ${v==="hs"?"HSYNC":v==="vs"?"VSYNC":v[0].toUpperCase()+"["+v.slice(1)+"]"} · ${pin}`;
+  return `${k.toUpperCase()} ${v.toUpperCase()} · ${pin}`;
+}
+/* <option>s grouped like the board (sw / buttons / LCD / …); `extra(t)` adds a note */
+function pinOptGroups(list, cur, extra){
+  const by=new Map(); list.forEach(t=>{ const g=PIN_GROUPS[t.split(":")[0]]||"อื่นๆ"; if(!by.has(g)) by.set(g,[]); by.get(g).push(t); });
+  return [...by].map(([g,L])=>`<optgroup label="${esc(g)}">`+L.map(t=>`<option value="${t}" ${t===cur?"selected":""}>${esc(pinOptLabel(t))}${extra?extra(t):""}</option>`).join("")+"</optgroup>").join("");
 }
 /* every bit the entity exposes: {key, port, bit, dir, vhdl} · key = "a" or "d[3]" (what sch.pinmap stores) */
 function uxPortBits(sch){
@@ -14705,8 +14739,16 @@ function uxGuessTarget(b, used){
   if(b.dir==="in"){
     if(/^(clk|clock|clk_?50m?|sys_?clk)$/.test(n)) t="clk";
     else if(/^(rst|reset|btn|pb|key)/.test(n)){ for(let i=4;i>=0&&!t;i--) t=free("pb:"+i); }
+    else if(/^(uart_?)?rx(d)?$/.test(n)) t=free("uart:rxd");
   } else {
     let m;
+    if(/^lcd_?rs$|^rs$/.test(n)) t=free("lcd:rs");
+    else if(/^lcd_?(e|en|enable)$/.test(n)) t=free("lcd:e");
+    else if(/^lcd_?(data|d|db)?$/.test(n) && b.bit!=null && b.width<=8) t=free("lcd:d"+b.bit);
+    else if(/^(uart_?)?tx(d)?$/.test(n)) t=free("uart:txd");
+    else if(/^(h_?sync|vga_?hs(ync)?)$/.test(n)) t=free("vga:hs");
+    else if(/^(v_?sync|vga_?vs(ync)?)$/.test(n)) t=free("vga:vs");
+    if(t) return t;
     // bus on the 7-seg: top bit = a (the board's own Seven_Segment[7]=A … [0]=DP convention)
     if(/^(seg|seven|sseg|hex)/.test(n) && b.bit!=null){ const L=["a","b","c","d","e","f","g","dp"][b.width-1-b.bit]; t=(L&&b.width<=8)?free("seg:"+L):null; }
     else if((m=n.match(/^seg_?([a-g]|dp)$/))||(m=n.match(/^([a-g]|dp)$/))) t=free("seg:"+m[1]);
@@ -14742,12 +14784,16 @@ function uxRenderPinPage(){
   const bits=uxPortBits(sch), own=sch.pinmap||{};
   const top=state.project.schematics[state.project.topId];
   const count={}; bits.forEach(b=>{ const t=own[b.key]; if(t) count[t]=(count[t]||0)+1; });
-  const opt=(list,cur)=>'<option value="">— ไม่ต่อขา —</option>'+list.map(t=>`<option value="${t}" ${t===cur?"selected":""}>${esc(pinOptLabel(t))}${count[t]&&t!==cur?" (ใช้แล้ว)":""}</option>`).join("");
+  // a package pin taken by another target (LCD data = LED 7…0) counts as used too
+  const byPin={}; Object.entries(count).forEach(([t,n])=>{ const p=BOARD_PINS[t]; if(p) byPin[p]=(byPin[p]||0)+n; });
+  const opt=(list,cur)=>'<option value="">— ไม่ต่อขา —</option>'+pinOptGroups(list, cur, t=>t===cur?"":count[t]?" (ใช้แล้ว)":byPin[BOARD_PINS[t]]?" (ขาเดียวกับที่ใช้แล้ว)":"");
   const busOpt=(dir,w)=>{   // one choice fills the whole bus with consecutive pins
     const pool=dir==="in"?["sw"]:["led"], o=[];
     pool.forEach(k=>{ for(let s=0;s+w<=16;s+=(w<=4?4:8)) o.push(`<option value="${k}:${s}">${k==="sw"?"SW":"LED"} ${s+w-1}…${s}</option>`); });
     if(dir==="out"&&(w===7||w===8)){ o.push(`<option value="seg-a">7-seg a…g${w===8?",dp":""} (บิตบนสุด = a)</option>`); o.push(`<option value="seg-g">7-seg ${w===8?"dp,":""}g…a (บิต 0 = a)</option>`); }
     if(dir==="out"&&w===4) o.push('<option value="an">เลือกหลัก 3…0</option>');
+    if(dir==="out"&&w===8) o.push('<option value="lcd:d">LCD data 7…0</option>');
+    if(dir==="out"&&w===4) ["r","g","b"].forEach(c=>o.push(`<option value="vga:${c}">VGA ${c.toUpperCase()}[3:0]</option>`));
     return '<option value="">ตั้งทั้งบัส…</option>'+o.join("");
   };
   let rows="", lastPort=null;
@@ -14784,6 +14830,8 @@ function uxRenderPinPage(){
     for(let i=0;i<w;i++){ let t;
       if(v==="seg-a"||v==="seg-g"){ const L=["a","b","c","d","e","f","g","dp"]; t="seg:"+(v==="seg-a"?L[w-1-i]:L[i]); }
       else if(v==="an") t="an:"+i;
+      else if(v==="lcd:d") t="lcd:d"+i;
+      else if(/^vga:[rgb]$/.test(v)) t=v+i;
       else { const [k,s0]=v.split(":"); t=k+":"+(+s0+i); }
       sch.pinmap[`${port}[${i}]`]=t; }
     commit(); });
@@ -14826,7 +14874,8 @@ uxXdcBody=function(){
       // the label on its OWN line: XDC is Tcl, where `#` starts a comment only at the start of a
       // command — "[get_ports x]   ## SW 0" hands "##", "SW", "0" to set_property as arguments,
       // the command fails and Vivado ends with every port unconstrained (NSTD-1 / UCIO-1)
-      x+=`## ${pinTargetLabel(t)}\nset_property -dict {PACKAGE_PIN ${BOARD_PINS[t]||"?"} IOSTANDARD LVCMOS33} [get_ports ${port}]\n`;
+      // push buttons: PULLDOWN as in the board's XDC — without it a released button floats
+      x+=`## ${pinTargetLabel(t)}\nset_property -dict {PACKAGE_PIN ${BOARD_PINS[t]||"?"} IOSTANDARD LVCMOS33${/^pb:/.test(t)?" PULLDOWN true":""}} [get_ports ${port}]\n`;
       if(t==="clk" && !clk){ clk=true; x+=`create_clock -period 20.000 -name sys_clk [get_ports ${port}]\n`; } });
     x+="\n"; });
   UX.xdcMissing=miss;
@@ -19472,12 +19521,16 @@ function boardDoctor(sch){
   const miss=bits.filter(b=>!b.t);
   if(miss.length) add("err",`ยังไม่ได้เลือกขา ${miss.length} ขา: ${miss.slice(0,6).map(b=>b.key).join(", ")}${miss.length>6?" …":""}`,
     "Vivado ต้องรู้ว่าทุกขาของวงจรต่อกับอะไรบนบอร์ด ไม่งั้น build ไม่ผ่าน","ไปหน้าเลือกขา แล้วกด “เดาขาให้” หรือเลือกเอง","pins");
-  const byT={}; bits.filter(b=>b.t).forEach(b=>(byT[b.t]=byT[b.t]||[]).push(b.key));
-  Object.entries(byT).filter(([,ks])=>ks.length>1).forEach(([t,ks])=>
-    add("err",`${ks.join(" กับ ")} ใช้ขาเดียวกัน (${pinTargetLabel(t)})`,"ขาจริงหนึ่งขาต่อได้กับสัญญาณเดียว — Vivado จะ error","เปลี่ยนขาของตัวใดตัวหนึ่ง","pins"));
+  // by PACKAGE pin: LCD data 0 and LED 7 are both M4 — two targets, one wire on the board
+  const byP={}; bits.filter(b=>b.t).forEach(b=>{ const p=BOARD_PINS[b.t]||b.t; (byP[p]=byP[p]||[]).push(b); });
+  Object.entries(byP).filter(([,bs])=>bs.length>1).forEach(([p,bs])=>{
+    const same=bs.every(b=>b.t===bs[0].t);
+    add("err",`${bs.map(b=>b.key).join(" กับ ")} ใช้ขาเดียวกัน (${same?pinTargetLabel(bs[0].t):bs.map(b=>pinTargetLabel(b.t)).join(" = ")})`,
+      same?"ขาจริงหนึ่งขาต่อได้กับสัญญาณเดียว — Vivado จะ error":`บนบอร์ด ${[...new Set(bs.map(b=>b.t))].join(" กับ ")} คือขา ${p} ขาเดียวกัน (เช่นสาย data ของ LCD ใช้ขาเดียวกับ LED 7…0) — Vivado จะ error`,
+      "เปลี่ยนขาของตัวใดตัวหนึ่ง","pins"); });
   bits.filter(b=>b.t).forEach(b=>{ const k=b.t.split(":")[0];
-    if(b.dir==="in" && ["led","seg","an","buzzer"].includes(k)) add("err",`INPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"LED / 7-seg เป็นของที่บอร์ด “แสดง” — รับค่าจากมันไม่ได้","ให้ INPUT ใช้สวิตช์ (SW) หรือปุ่ม","pins");
-    if(b.dir==="out" && ["sw","pb","clk"].includes(k)) add("err",`OUTPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"สวิตช์/ปุ่ม/นาฬิกาเป็นของที่ “ส่งค่าเข้า” วงจร — ส่งออกไปไม่ได้","ให้ OUTPUT ใช้ LED หรือ 7-seg","pins"); });
+    if(b.dir==="in" && !PIN_IN_TARGETS.includes(b.t)) add("err",`INPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"LED / 7-seg / LCD เป็นของที่บอร์ด “แสดง” — รับค่าจากมันไม่ได้","ให้ INPUT ใช้สวิตช์ (SW) หรือปุ่ม","pins");
+    if(b.dir==="out" && !PIN_OUT_TARGETS.includes(b.t)) add("err",`OUTPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"สวิตช์/ปุ่ม/นาฬิกาเป็นของที่ “ส่งค่าเข้า” วงจร — ส่งออกไปไม่ได้","ให้ OUTPUT ใช้ LED, 7-seg หรือ LCD","pins"); });
   // --- the circuit itself (its own errors make the board meaningless too) ---
   try{ explainSim(sch).filter(x=>x.lvl==="err").slice(0,4).forEach(x=>add("err","วงจร: "+x.title, x.why, x.fix, "sim")); }catch(_){}
   let flat=null; try{ flat=flattenSchematic(sch).sch; }catch(_){}
@@ -21331,7 +21384,10 @@ const LAB_PIN_PRESETS={
     {re:/start|stop|btn|^ss$|run|toggle/i, dir:"in", t:()=>"pb:0"},
     {re:/^(sw|sws|switch(es)?|time_?in|t_?in|preset|din|start_?time)$/i, dir:"in", t:i=>"sw:"+i},
     {re:/err/i, dir:"out", t:()=>"led:0"}, {re:/time_?up|timeup|t_?up|done|zero|finish/i, dir:"out", t:()=>"led:1"}]},
-  "8":{title:"แลป 8 ตัวเลข 4 หลักจาก SW15–0", rules:[
+  "8":{title:"แลป 8 ตัวเลข 4 หลักจาก SW15–0 / จอ LCD", rules:[
+    // the LCD (lab 8.1): data[7:0] → LCD data 7…0 (= the pins of LED 7…0), RS M5, E P5
+    {re:/^(lcd_?)?(data|db|d)$/i, dir:"out", t:i=>"lcd:d"+i}, {re:/^(lcd_?)?rs$/i, dir:"out", t:()=>"lcd:rs"},
+    {re:/^(lcd_?)?(e|en|enable)$/i, dir:"out", t:()=>"lcd:e"},
     {re:/thousands|d3|dig3/i, dir:"in", t:i=>"sw:"+(12+i)}, {re:/hundreds|d2|dig2/i, dir:"in", t:i=>"sw:"+(8+i)},
     {re:/tens|d1|dig1/i, dir:"in", t:i=>"sw:"+(4+i)}, {re:/ones|units?|d0|dig0/i, dir:"in", t:i=>"sw:"+i}]},
 };
@@ -21783,6 +21839,8 @@ function agrPinTarget(t){
   if(m) return ({switch:"sw", "สวิตช์":"sw", btn:"pb", button:"pb", "ปุ่ม":"pb", digit:"an", "หลัก":"an"}[m[1]]||m[1])+":"+(+m[2]);
   m=/^(?:seg|7seg|segment)[:_\-\[(]?([a-g]|dp)[\])]?$/.exec(s);
   if(m) return "seg:"+m[1];
+  m=/^lcd[:_\-]?(?:data|d)?[\[(]?(\d)[\])]?$/.exec(s); if(m) return "lcd:d"+m[1];
+  m=/^lcd[:_\-]?(rs|e|en)$/.exec(s); if(m) return "lcd:"+(m[1]==="en"?"e":m[1]);
   return t;
 }
 {
@@ -21792,7 +21850,7 @@ function agrPinTarget(t){
     try{ return _sp(Object.assign({}, a, {map})); }
     catch(e){
       if(/is not a valid (input|output) target/.test(String(e.message)))
-        mcpFail(e.message, "targets: inputs sw:0–sw:15, pb:0–pb:4 (top bottom left right center), clk · outputs led:0–led:15, seg:a–seg:g, seg:dp, an:0–an:3 — e.g. {\"a\":\"sw:0\", \"y\":\"led:3\"}");
+        mcpFail(e.message, "targets: inputs sw:0–sw:15, pb:0–pb:4 (top bottom left right center), clk · outputs led:0–led:15, seg:a–seg:g, seg:dp, an:0–an:3, buzzer, lcd:d0–lcd:d7, lcd:rs, lcd:e, vga:hs/vs/r0–b3, uart:txd/rxd, j5:5–j5:20 (board_pins lists all) — e.g. {\"a\":\"sw:0\", \"y\":\"led:3\"}");
       throw e;
     }
   };
@@ -22976,6 +23034,94 @@ function examPartFromMessage(msg){
     return {kind:e.kind, args:e.args, simple:!more, named:[]};
   };
 }
+
+/* ===== 55. Push buttons on the simulated board =====================================================
+   An INPUT mapped to a push button (pb:0–4, e.g. the centre button J12) could only be pressed in
+   "⚡ เล่นเวลาจริง": the truth-table board and the clock-by-clock board quietly gave that input a
+   free SWITCH instead, and clicking the button did nothing. Now the button is the input there too:
+   held = 1 while the mouse is down (a click on the clock-by-clock board lasts at least the clock
+   on show, so "click, then ก้าว 1 clock" latches it, as on the board). The button shows the name
+   of the input it drives. */
+const PB_DOM_ORDER=[0,2,4,3,1];             // .pbtn order in the drawing: top, left, centre, right, bottom
+function pbTargetOf(name){
+  const own=(activeSch()||{}).pinmap||{}, t=pmGet(own, name)||"";
+  return /^pb:[0-4]$/.test(t) ? +t.slice(3) : null;
+}
+/* names on the buttons: {pb index → [input names]} */
+function pbLabelBoard(byPb){
+  const btns=[...document.querySelectorAll('#simPcb .pbtn')];
+  btns.forEach((p,k)=>{ p.querySelectorAll(".pb-name").forEach(x=>x.remove()); p.classList.remove("pb-mapped");
+    const names=k<5 ? byPb[PB_DOM_ORDER[k]] : null; if(!names || !names.length) return;
+    p.classList.add("pb-mapped");
+    p.insertAdjacentHTML("beforeend", `<div class="pb-name">${esc(names.join(", "))}</div>`); });
+}
+/* ---- truth-table board: the input reads SIM_SW["pb:K"] ---- */
+{
+  const _def=simDefaultPinmap;
+  simDefaultPinmap=function(tt){ const pm=_def.apply(this, arguments);
+    tt.inputs.forEach(n=>{ const k=pbTargetOf(n); if(k!=null) pm.inMap[n]="pb:"+k; });
+    return pm; };
+  const _sync=uxSyncSimPinmap;
+  uxSyncSimPinmap=function(){ _sync.apply(this, arguments);
+    if(!SIM_PINMAP || !UX.lastTT) return;
+    let ch=false; UX.lastTT.inputs.forEach(n=>{ const k=pbTargetOf(n);
+      if(k!=null && SIM_PINMAP.inMap[n]!=="pb:"+k){ SIM_PINMAP.inMap[n]="pb:"+k; ch=true; }
+      else if(k==null && typeof SIM_PINMAP.inMap[n]==="string"){ SIM_PINMAP.inMap[n]=0; ch=true; } });
+    if(ch && SIM_REDRAW) try{ SIM_REDRAW(); }catch(_){}
+    pbCombLabels(); };
+  const _swl=simSwLabel;
+  simSwLabel=function(i){ return typeof i==="string" && /^pb:/.test(i) ? pinOptLabel(i).replace(" · "," ") : _swl.apply(this, arguments); };
+  const _wire=wireSimBoard;
+  wireSimBoard=function(j){ const r=_wire.apply(this, arguments); if(j && j.truth_table) pbCombLabels(); return r; };
+}
+function pbCombLabels(){
+  if(!SIM_PINMAP || !SIM_LAST_TT || SIM_SEQ) return;
+  const by={}; SIM_LAST_TT.inputs.forEach(n=>{ const v=SIM_PINMAP.inMap[n]; if(typeof v==="string" && /^pb:/.test(v)) (by[+v.slice(3)]=by[+v.slice(3)]||[]).push(n); });
+  pbLabelBoard(by);
+}
+/* ---- clock-by-clock board: the button drives that input's history from the clock on show ---- */
+{
+  const _wire=wireSimBoardSeq;
+  wireSimBoardSeq=function(j, opts){
+    const r=_wire.apply(this, arguments);
+    const S=SIM_SEQ; if(!S) return r;
+    S.pbOf=S.inputs.map(n=>pbTargetOf(n));
+    const by={};
+    S.pbOf.forEach((k,q)=>{ if(k==null) return; (by[k]=by[k]||[]).push(S.inputs[q]);
+      // it had been given a free switch: take that back
+      const sw=S.swOf[q]; S.swOf[q]=null;
+      const u=sw!=null && document.querySelector('#simPcb .swUnit[data-sw="'+sw+'"]');
+      if(u && !S.swOf.includes(sw)){ u.classList.remove("mapped"); const nm=u.querySelector(".swName"); if(nm) nm.textContent="sw["+sw+"]"; } });
+    pbLabelBoard(by);
+    try{ seqTable(); }catch(_){}
+    return r; };
+}
+function pbSeqSet(k, v, from){
+  const S=SIM_SEQ; if(!S || !S.hist || !S.pbOf) return false;
+  const qs=S.pbOf.map((p,q)=>p===k?q:-1).filter(q=>q>=0); if(!qs.length) return false;
+  for(let i=from;i<S.hist.length;i++) qs.forEach(q=>S.hist[i][q]=v);
+  if(seqResim(S.hist.length)) seqShow(S.idx);
+  return true;
+}
+document.addEventListener("mousedown", e=>{
+  const p=e.target.closest && e.target.closest('#simPcb .pbtn'); if(!p) return;
+  if(typeof RT==="object" && RT.on) return;                      // real-time mode has its own handler (16-…)
+  const d=[...document.querySelectorAll('#simPcb .pbtn')].indexOf(p); if(d<0 || d>4) return;
+  const k=PB_DOM_ORDER[d];
+  let up=null;
+  if(SIM_SEQ){ const at=SIM_SEQ.idx;
+    if(!pbSeqSet(k, 1, at)) return;
+    up=()=>pbSeqSet(k, 0, Math.max(SIM_SEQ?SIM_SEQ.idx:0, at+1)); }
+  else if(SIM_PINMAP && SIM_LAST_TT && SIM_REDRAW){
+    const key="pb:"+k; if(!SIM_LAST_TT.inputs.some(n=>SIM_PINMAP.inMap[n]===key)) return;
+    SIM_SW[key]=1; SIM_REDRAW(); pbCombLabels();
+    up=()=>{ SIM_SW[key]=0; SIM_REDRAW(); pbCombLabels(); }; }
+  else return;
+  p.classList.add("pb-down");
+  const rel=()=>{ document.removeEventListener("mouseup", rel, true); p.classList.remove("pb-down"); up(); };
+  document.addEventListener("mouseup", rel, true);
+  e.preventDefault();
+}, true);
 
 </script>
 <!-- UX-LAYER:END -->
