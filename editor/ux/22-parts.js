@@ -217,6 +217,7 @@ function partParams(kind, a){
   Object.entries(P.params||{}).forEach(([k,s])=>{
     let v=a[k]!=null?a[k]:s.def;
     if(s.bool) v=v===true||v==="true"||v===1;
+    else if(s.text){ v=String(v); const e=s.check&&s.check(v); if(e) mcpFail(`${kind}.${k}: ${e}`); }
     else if(s.options){ v=typeof s.def==="number"?+v:String(v); if(!s.options.includes(v)) mcpFail(`${kind}.${k} must be one of ${s.options.join(", ")}`); }
     else { v=Math.floor(+v); if(!(v>=s.min && v<=s.max)) mcpFail(`${kind}.${k} must be ${s.min}..${s.max}`); }
     out[k]=v; });
@@ -329,7 +330,7 @@ function partBuild(kind, a){
 MCP_OPS.list_parts = a=>{
   const q=String(a.query||"").toLowerCase();
   return {parts:Object.entries(PARTS).filter(([k,P])=>!q || (k+" "+P.label+" "+P.desc+" "+P.group).toLowerCase().includes(q)).map(([k,P])=>{
-    const p={}; Object.entries(P.params||{}).forEach(([n,s])=>p[n]=s.options?s.options:s.bool?"true/false":`${s.min}..${s.max}`);
+    const p={}; Object.entries(P.params||{}).forEach(([n,s])=>p[n]=s.options?s.options:s.bool?"true/false":s.text?"text, e.g. "+JSON.stringify(s.def):`${s.min}..${s.max}`);
     let ports=null; try{ const d={}; Object.entries(P.params||{}).forEach(([n,s])=>d[n]=s.def); const pp=P.ports(d);
       ports={in:Object.entries(pp.in).map(([b,w])=>w>1?`${b}[${w-1}:0]`:b), out:Object.entries(pp.out).filter(([,w])=>w>0).map(([b,w])=>w>1?`${b}[${w-1}:0]`:b)}; }catch(_){}
     return {kind:k, label:P.label, group:P.group, description:P.desc, params:p, sequential:!!P.seq, ports_with_defaults:ports}; }),
