@@ -327,6 +327,11 @@ async function aiAgentRun(msg, opts){
       // while the real one had a wrong carry): name the sheets and what is missing
       // a nudge answered with words only is not repeated: the model that cannot make the call there wrote
       // made-up results ("ผ่าน 1,000 จาก 1,000") each time it was pushed again (div25: 4 calls, 120 s)
+      // a sheet that already passed a check that counts (verify_truth_table / check_spec / the request's test)
+      // needs no more: the nudge used to fire after a passing verify_truth_table (SFT3 report N11)
+      [...new Set([...needCheck, ...needSim])].forEach(n=>{ const s=Object.values(state.project.schematics).find(x=>x.name===n);
+        const passed=(run.steps||[]).some(x=>x.kind==="tool" && x.ok && /^(verify_truth_table|check_spec|compare_sheets)$/.test(x.tool) && (x.args||{}).sheet===n && /"pass":true/.test(String(x.result||"")));
+        if(s && (passed || sheetVerified(s) || (run.verified && run.verified.sheet===n))){ needCheck.delete(n); needSim.delete(n); } });
       if(unanswered && typeof aiagUnansweredFinish==="function"){ run.final=await aiagUnansweredFinish(run, m.content, needCheck, needSim); break; }
       if((needCheck.size || needSim.size) && nudges<2 && stopAt===Infinity){
         nudges++; think=true; unanswered=true;

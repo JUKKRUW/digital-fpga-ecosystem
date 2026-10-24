@@ -41,7 +41,14 @@ def period(sheet, cycles=200, port="clk_out"):
 
 
 def chat(message, budget=300):
-    call("ai_chat", {"message": message, "mode": "agent", "budget_s": budget})
+    for attempt in range(3):          # 2.7.3+: ai_chat answers an error when no run started (right after a project switch)
+        try:
+            call("ai_chat", {"message": message, "mode": "agent", "budget_s": budget})
+            break
+        except RuntimeError as e:
+            if attempt == 2 or "did not start" not in str(e):
+                raise
+            time.sleep(3)
     t0 = time.time()
     while True:
         s = call("ai_chat_status", {"wait": 40}, timeout=90)
