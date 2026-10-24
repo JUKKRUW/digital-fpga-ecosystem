@@ -80,7 +80,9 @@ aiagProbeFacts=function(run, final){
   const _bv=aiagBoardVerdict;
   aiagBoardVerdict=function(run){
     const touched=run.touched && run.touched.size, asked=/(ลงบอร์ด|บนบอร์ด.*(ได้|พร้อม)|พร้อม.*บอร์ด|\.bit|โปรแกรมลง|program|board)/i.test(String(run.message||""));
-    return touched || asked ? _bv.apply(this, arguments) : "";
+    // an answer that itself says the design is ready for the board gets the doctor's verdict too
+    const claims=/(พร้อมลงบอร์ด|ลงบอร์ดได้|พร้อม.{0,10}(บอร์ด|\.bit)|ready for the board)/i.test(String(run.final||""));
+    return touched || asked || claims ? _bv.apply(this, arguments) : "";
   };
 }
 
