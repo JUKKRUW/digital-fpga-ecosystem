@@ -162,6 +162,19 @@ TOOLS = [
       {"fsm": {"type": ["string", "object"]}, "sheet": SHEET, "name": {"type": "string"}, "state_out": {"type": "boolean"},
        "replace": {"type": "boolean", "description": "rebuild a sheet that already has parts (one undo brings it back)"}},
       ["fsm"], timeout=90),
+    T("vhdl_block", "Create or update a VHDL block: a block whose inside is VHDL text (one entity + its architecture), placed "
+      "and wired like any part; pins = the entity's ports (std_logic / std_logic_vector / unsigned / signed). The browser "
+      "simulators run the text (simulate, probe, check_spec, compare_sheets); Vivado gets it as written. Supported: signals, "
+      "constants, enum / array types (ROM tables), process with if / case / for / variables, rising_edge, when-else, "
+      "with-select, numeric_std arithmetic. Not: port map inside, wait, generate, inout, vectors > 32 bits. A block with "
+      "the same entity name is replaced in place. Use it only for what list_parts has no part for. sheet:'x' makes sheet x = "
+      "the block with a port per entity port (then check + simulate it; in bigger designs use {sheet:'x'} as a block).",
+      {"vhdl": {"type": "string", "description": "the whole VHDL text: library/use, entity, architecture"},
+       "sheet": {"type": "string", "description": "the sheet to make: this block + an INPUT/OUTPUT per port, wired (must not be the entity's name)"},
+       "replace": {"type": ["boolean", "string"], "description": "true: rebuild a sheet that already has parts; a name: the block to replace when the entity was renamed"},
+       "ports": {"type": "boolean", "description": "false: only place the block on an existing sheet (no ports, no wires)"},
+       "label": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"}},
+      ["vhdl"]),
     T("make_report", "Write the lab report into the project folder (<project>_report.html): every sheet (top first, then its "
       "blocks) as a picture, ports, truth table + minimised equations or the first 16 clocks with a timing diagram, state "
       "diagram, acceptance test, board pin table, VHDL — and <project>_report.pdf next to it (printed by headless Edge / "
@@ -317,7 +330,8 @@ TOOLS = [
       "gated clock, floating pins, multi-driver, constant outputs, unused inputs, divider chains).", {"sheet": SHEET}),
     # --- board
     T("board_pins", "Every board target you can assign: switches sw:0-15, buttons pb:0-4, clk (50 MHz), leds led:0-15, "
-      "7-seg seg:a-g/dp, digit selects an:0-3, buzzer — with package pins."),
+      "7-seg seg:a-g/dp, digit selects an:0-3, buzzer, LCD lcd:d0-d7/rs/e (data shares pins with led 7-0), "
+      "VGA vga:hs/vs/r0-3/g0-3/b0-3, TFT, ADC/DAC (SPI), audio, uart/wifi/ble txd/rxd, ps2, header j5:5-20 — with package pins."),
     T("get_pins", "Current pin assignment of a sheet's ports (bus bits as name[i]), unassigned ports and conflicts.", {"sheet": SHEET}),
     T("set_pins", "Assign ports/bits to board targets, e.g. {\"a\":\"sw:0\", \"seg[6]\":\"seg:a\", \"clk\":\"clk\"}; null clears.",
       {"sheet": SHEET, "map": {"type": "object"}}, ["map"]),
@@ -430,7 +444,7 @@ TOOLS = [
        "resume": {"type": "boolean", "description": "agent: continue the last run that stopped before answering (ai_chat_stop, "
                   "the step limit or the time budget) from its conversation, instead of starting over; message not needed"},
        "run_id": {"type": "integer", "description": "with resume: which run"},
-       "escalate": {"type": "boolean", "description": "agent: false = never switch to a bigger installed model when this run stalls (default: it does, and switches back after)"},
+       "escalate": {"type": "boolean", "description": "agent: true = when this run stalls, switch to the biggest installed agent model and back after (default off; localStorage schstudio.agentEscalate=1 turns it on for every run)"},
        "think": {"type": "boolean", "description": "agent: let the model reason (thinking) on its planning calls; default on, off for a fine-tuned model (trained without it)"},
        "temperature": {"type": "number", "minimum": 0, "maximum": 2, "description": "agent: sampling temperature (default 0.6; 0.3 for a fine-tuned model)"}}),
     T("ai_chat_status", "Wait (≤`wait` s) for the chat to finish the message sent with ai_chat, then return what "
@@ -477,7 +491,8 @@ AGENT_TOOLS = ["status", "get_sheet", "get_netlist", "list_component_types", "op
                "set_top_sheet", "add_component", "connect", "disconnect", "delete", "update_component", "apply",
                "build_part", "list_parts", "build_fsm", "build_hierarchy", "derive_spec", "set_spec", "check_spec", "compare_sheets",
                "build_circuit", "make_bus_ports", "check", "simulate", "verify_truth_table", "probe", "explain_simulation",
-               "get_pins", "set_pins", "auto_pins", "pin_preset", "board_check", "board_troubleshoot", "suggest_wires", "undo", "list_modules", "use_module", "save_module", "search_course"]
+               "get_pins", "set_pins", "auto_pins", "pin_preset", "board_check", "board_troubleshoot", "suggest_wires", "undo", "list_modules", "use_module", "save_module", "search_course",
+               "vhdl_block"]
 
 
 def openai_tools(names=None):

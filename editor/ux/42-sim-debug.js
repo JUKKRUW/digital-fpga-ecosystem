@@ -28,6 +28,29 @@ function sdWaveform(rowsVals, G){
       return one ? (x?"▔":"▁").repeat(w) : String(x).padStart(w); }).join("")); });
   return lines;
 }
+/* per output: how often it changes, its period once it repeats, the share of clocks at 1 (1-bit),
+   the values in order of first appearance and the first clocks — what a question about a counter /
+   divider needs, without reading every row */
+function sdSummary(vals, names){
+  const S={};
+  names.forEach(n=>{
+    const v=vals.map(x=>x[n]); if(!v.length) return;
+    let changes=0; for(let i=1;i<v.length;i++) if(v[i]!==v[i-1]) changes++;
+    let period=null;
+    const from=Math.floor(v.length/4);                    // allow a start-up stretch
+    for(let p=1; p<=Math.floor((v.length-from)/2) && period==null; p++){
+      let ok=true; for(let i=from;i+p<v.length;i++) if(v[i]!==v[i+p]){ ok=false; break; }
+      if(ok && v.slice(from).some(x=>x!==v[from])) period=p; }
+    const seen=[]; v.forEach(x=>{ if(!seen.includes(x) && seen.length<32) seen.push(x); });
+    const o={changes, period, last:v[v.length-1]};
+    if(seen.every(x=>x===0||x===1)){ o.high=+(v.filter(x=>x===1).length/v.length).toFixed(3);
+      // over one whole period (start-up skipped): a divider's duty, 0.5 for ÷ even N
+      if(period){ const w=v.slice(from, from+period); o.duty=+(w.filter(x=>x===1).length/period).toFixed(3); o.high_clocks=w.filter(x=>x===1).length; } }
+    if(period==null && !changes) o.constant=v[0];
+    o.values=seen; o.first=v.slice(0,24);
+    S[n]=o; });
+  return S;
+}
 {
   const _sim=MCP_OPS.simulate;
   MCP_OPS.simulate=a=>{
@@ -45,6 +68,12 @@ function sdWaveform(rowsVals, G){
         const Gin=typeof (r.rows[0]||{}).inputs==="string" && r.rows[0].inputs.length===ins.length ? sdGroups(ins) : [];
         r.waveform=sdWaveform(vals.slice(0, 64), [...Gin, ...G]);
         r.note=(r.note?r.note+" · ":"")+"values = every port as one number per clock (q0..qn → q); waveform = the same, drawn";
+        // a summary per output FIRST: the agent's tool message is clipped at 6000 characters and a long
+        // run's rows filled it — a divider's period could not be confirmed (SFT2 review)
+        const summary=sdSummary(vals, G.map(g=>g.name));
+        const out={sheet:r.sheet, kind:r.kind, clocks:vals.length, summary};
+        Object.keys(r).forEach(k=>{ if(!(k in out)) out[k]=r[k]; });
+        return out;
       } else if(r.mode==="vectors"){
         r.rows.forEach(x=>{ x.values=Object.fromEntries(Object.entries(x.outputs).map(([k,v])=>[k, v&&typeof v==="object"?v.value:typeof v==="string"&&/^[01]+$/.test(v)?parseInt(v,2):v])); });
         const Gi=sdGroups(Object.keys((r.rows[0]||{}).values||{})); if(sdWide(Gi)) r.rows.forEach(x=>Object.assign(x.values, Object.fromEntries(Gi.filter(g=>g.bits.length>1).map(g=>[g.name, sdVal(g, i=>x.values[Object.keys(x.values)[i]])]))));

@@ -1,0 +1,254 @@
+===== PAGE 1 =====
+
+
+===== PAGE 2 =====
+Chapter 13 – Programmable Logic
+             Device Architectures
+
+===== PAGE 3 =====
+Chapter 13 Objectives
+       • Selected areas covered in this chapter:
+               – Describing different categories of digital
+                 system devices.
+               – Describing different types of PLDs.
+               – Interpret PLD data book information.
+               – Defining PLD terminology.
+               – Comparing different programming technologies
+                 used in PLDs.
+               – Comparing the architectures of different types
+                 of PLDs.
+               – Comparing the features of Altera CPLDs and FPGAs.
+
+===== PAGE 4 =====
+13-1 Digital Systems Family Tree
+                     A digital system family tree showing most of the
+                   hardware choices currently available can be useful
+                  in sorting out the many categories of digital devices.
+
+===== PAGE 5 =====
+13-1 Digital Systems Family Tree
+       • The first category of standard logic devices
+         refers to the basic functional digital components.
+               – Gates, flip-flops, decoders, multiplexers, registers,
+                 counters, etc.
+                      • Available as SSI and MSI chips.
+       • With the second category, microcomputer/DSP
+         systems, devices can be controlled electronically
+         & data manipulated by executing a program of
+         instructions.
+                                    A hardware solution for a digital design
+                                   is always faster than a software solution.
+
+===== PAGE 6 =====
+13-1 Digital Systems Family Tree
+       • The third category are application specific
+         integrated circuits (ASIC).
+               – ICs designed for a specific application.
+
+===== PAGE 7 =====
+13-1 Digital Systems Family Tree
+       • Programmable logic devices (PLDs)—called
+         field-programmable logic devices (FPLDs).
+               – Can be custom-configured to create any desired
+                 digital circuit for simple or complex systems.
+                      • Generally the lowest cost of the subcategories.
+       • The PLD architecture selected depends on the
+         application—PLDs are very diverse and dynamic.
+               – SPLD—simple programmable logic devices.
+               – CPLD—complex programmable logic devices.
+               – FPGA—field programmable gate arrays.
+                      • CPLDs and FPGAs are often referred to as high-
+                        capacity programmable logic devices (HCPLDs).
+
+===== PAGE 8 =====
+13-1 Digital Systems Family Tree
+       • Gate arrays are ULSI circuits.
+               – Logic functions are created by interconnections of
+                 hundreds of thousands of prefabricated gates.
+                      • A custom-designed mask is used—much like
+                        the stored data in a mask-programmed ROM.
+               – Individually less expensive than PLDs of
+                 comparable gate count.
+                      • Custom programming process is very expensive
+                        and requires a great deal of lead time.
+
+===== PAGE 9 =====
+13-1 Digital Systems Family Tree
+       • Standard-cell ASICs use predefined logic
+         function building blocks called cells to create
+         the desired digital system.
+               – A library of available cells is stored in a database.
+                      • Design costs for standard-cell ASICs are higher
+                        than for MPGAs—with greater lead time.
+       • Cell-based functions are designed to be much
+         smaller than equivalent functions in gate arrays.
+               – Allows for generally higher-speed operation and
+                 cheaper manufacturing costs.
+                                                                                                               Columbus, OH 43235
+
+===== PAGE 10 =====
+13-1 Digital Systems Family Tree
+       • Full-custom ASICs are the ultimate ASIC choice.
+               – All components and the interconnections between
+                 them are custom-designed by the IC designer.
+               – Requires a significant amount of time and expense,
+                 but it can result in ICs that can operate at the highest
+                 possible speed and require the smallest die area.
+                      • Which significantly lowers manufacturing cost.
+
+===== PAGE 11 =====
+13-2 Fundamentals of PLD Circuitry
+                      A device that be programmed by blowing the
+                      appropriate fuses at the input to the OR array
+
+===== PAGE 12 =====
+13-2 Fundamentals of PLD Circuitry
+                                   Manufacturers have adopted the
+                                 simplified diagram symbols shown.
+                                                                                                               Columbus, OH 43235
+
+===== PAGE 13 =====
+13-3 PLD Architectures
+       • PROMs.
+               – Fuses are blown to implement a SOP expression.
+               – Bit map generation is made easier with general
+                 purpose logic compilers.
+
+===== PAGE 14 =====
+13-3 PLD Architectures
+       • Programmable array logic (PAL).
+               – Every AND gate can be programmed to generate
+                 any desired product of four input variables.
+       • The PAL family also contains devices with
+         variations of the basic SOP circuitry.
+               – Channel SOP logic circuit to a D FF input and use
+                 one of the pins as a clock input, to clock all of the
+                 output flip-flops synchronously.
+                      • These devices are referred to as registered PLDs
+                        because the outputs pass through a register.
+
+===== PAGE 15 =====
+13-3 PLD Architectures
+       • Field programmable logic array (FPLA)
+               – Programmable AND as well as OR arrays.
+               – Used in state machine applications where a large
+                 number of product terms are needed in each SOP
+                 expression.
+                      • Not as widely accepted by engineers.
+
+===== PAGE 16 =====
+13-3 PLD Architectures
+       • Generic array logic architecture (GAL).
+               – Uses an EEPROM array in the programmable
+                 matrix that determines the connections.
+                      • The EEPROM switches can be erased and
+                        reprogrammed at least 100 times.
+               – GAL chips use a programmable output logic
+                 macrocell (OLMC).
+               – Can be used as a generic, pin-compatible
+                 replacement for most PAL devices.
+
+===== PAGE 17 =====
+13-4 The Altera MAX7000S Family
+        EEPROM based device in Altera MAX7000S CPLD family.
+
+===== PAGE 18 =====
+13-4 The Altera MAX7000S Family
+       • The major structures in the MAX7000S are the
+         logic array blocks (LABs) and programmable
+         interconnect array (PIA).
+               – A LAB contains a set of 16 macrocells and looks
+                 very similar to a single SPLD device.
+                      • Each macrocell consists of a programmable AND/OR
+                        circuit and a programmable register (flip-flop).
+
+===== PAGE 19 =====
+13-5 The Altera MAX II Family
+       • Major structures:
+               – Logic array blocks (LABs).
+                      • 16 macrocells—number of determined from the
+                        part number (EPM7128S has 128).
+               – Programmable interconnect array (PIA).
+                      • A global bus that connects signal sources/destinations.
+                      • Up to 36 signals can feed each LAB from the PIA
+               – I/O pins are connected to specific macrocells.
+                      • Number of available I/O pins depends on package.
+               – ISP features uses a JTAG interface which requires
+                 four pins dedicated to the programming interface.
+                      • TDI (test data in).
+                      • TDO (test data out).
+                      • TMS (test mode select).
+                      • TCK (test clock).
+
+===== PAGE 20 =====
+13-5 The Altera MAX II Family
+       • In-system programming can be done via JTAG
+         pins and a PC parallel port.
+       • Macrocells not connected to I/O pins can be used
+         by the compiler for internal logic.
+       • The four input-only pins can be configured as high
+         speed control signals or general user inputs.
+               – GCLK1—primary global clock input for all macrocells.
+               – GCLK2—secondary global clock.
+               – OE1—the tristate enable.
+               – GCLRn—controls the asynchronous clear on any
+                 macrocell.
+
+===== PAGE 21 =====
+13-5 The Altera MAX II Family
+       • I/O control blocks configure each I/O pin for
+         input, output, or bi-directional operation.
+       • All I/O pins have a tristate output buffer that is:
+               – Permanently enabled or disabled.
+               – Controlled by one of two global output enable pins.
+               – Controlled by other inputs or functions generated
+                 by other macrocells.
+       • During in-system programming I/O pins will be
+         tristated and internally pulled up to avoid board
+         conflicts.
+
+===== PAGE 22 =====
+13-5 The Altera MAX II Family
+       • Macrocells can produce either combinational
+         or registered output.
+       • Combinational outputs are created by bypassing
+         the register in a macrocell.
+       • Each macrocell can produce five product terms.
+         Additional product terms can be borrowed from
+         adjacent macrocells in the same LAB.
+
+===== PAGE 23 =====
+13-5 The Altera MAX II Family
+       • Macrocell FFs can implement D, T, JK, or
+         SC(SR) operations.
+       • Three different clocking modes.
+               – With global clock signal.
+               – With global clock when FF is enabled.
+               – With array clock signal produced by a buried
+                 macrocell or a non-global input pin.
+       • Each register can be cleared with GCLRn pin.
+       • All registers will reset at power-up.
+
+===== PAGE 24 =====
+13-6 The Altera Cyclone Series
+       • Different architecture—based on the look up
+         table (LUT).
+               – The LUT functions like a truth table for the logic
+                 function.
+       • SRAM devices that use LUT are generally
+         classified as field programmable gate arrays
+         (FPGAs).
+
+===== PAGE 25 =====
+13-6 The Altera Cyclone Series
+       • The LUT:
+               – Is a portion of the programmable logic block that
+                 produces a combinational function.
+                      • The function can be output or registered.
+               – Consists of FFs that store the truth table.
+               – Is usually small, typically with 4 input variables.
+               – Is basically, a 16 X 1 SRAM memory block.
+               – Has SRAM that must be loaded at PLD power up.
+
+===== PAGE 26 =====
+END

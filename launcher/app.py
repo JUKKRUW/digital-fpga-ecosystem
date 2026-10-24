@@ -40,7 +40,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 APP_NAME = "FPGA Ecosystem"
 APP_ID = "fpga-ecosystem"
-VERSION = "2.6.0"
+VERSION = "2.7.0"
 
 FROZEN = getattr(sys, "frozen", False)
 # ROOT = where the bundled content lives (repo root in dev, _MEIPASS when frozen)
@@ -111,7 +111,9 @@ DEFAULTS = {
         "llm_endpoint": "http://127.0.0.1:8080/v1/chat/completions",
         "llama_server": "",       # path to llama-server(.exe) for llm=local
         "llama_model": "",        # path to a .gguf for llm=local
-        "llama_args": "",         # blank = llm.DEFAULT_ARGS (context 64K, tool calls, layers fitted to the GPU)
+        "llama_ctx": 0,           # >0 = context size (-c), over whatever llama_args says
+        "llama_cache_ram": -1,    # >=0 = --cache-ram MB, over whatever llama_args says
+        "llama_args": "",         # blank = llm.DEFAULT_ARGS (context 24K, tool calls, layers fitted to the GPU)
         "cosim": False,           # GHDL co-simulation check
         "ghdl": "",               # path to ghdl(.exe); blank = auto-detect
         "fpga": True,             # FPGA Builder (VHDL -> .bit -> board)
@@ -264,6 +266,15 @@ llm.init(DATA_DIR, CONFIG_DIR / "llama-server.log")
 
 
 def start_llama(force: bool = False) -> dict:
+    # config.json edited by hand while the app runs: take its llama_* values (the app's copy used to win,
+    # and the next save wrote the old ones back)
+    try:
+        disk = json.loads(CONFIG_FILE.read_text("utf-8")).get("features") or {}
+        for k in ("llama_args", "llama_ctx", "llama_cache_ram"):
+            if k in disk:
+                CFG["features"][k] = disk[k]
+    except Exception:
+        pass
     f = CFG["features"]
     if f.get("llm") != "local" and not force:
         return {"ok": False, "error": "llm is not local"}
@@ -271,8 +282,9 @@ def start_llama(force: bool = False) -> dict:
     if not (server and model):
         return {"ok": False, "error": "ยังไม่มี llama.cpp หรือไฟล์โมเดล"}
     args = (f.get("llama_args") or "").strip()
-    if not args or args in llm.OLD_DEFAULT_ARGS:      # the old fixed -ngl 999 / 8K context
+    if not args or args in llm.OLD_DEFAULT_ARGS:      # the old fixed -ngl 999 / 8K context / 64K context
         args = llm.DEFAULT_ARGS
+    args = llm.with_overrides(args, f.get("llama_ctx"), f.get("llama_cache_ram"))
     return llm.start(server, model, f.get("llm_endpoint"), args)
 
 
@@ -454,7 +466,7 @@ def _rag_index(r, key, cache):
         if not _embed_ready(300):
             raise RuntimeError("the embedding server did not start (see llama-embed.log)")
         vecs = []
-        texts = [((d.get("title") or "") + "\n" + (d.get("text") or ""))[:2000] for d in r.docs]
+        texts = [((d.get("title") or "") + "\n" + (d.get("text") or ""))[:llm.EMBED_CHARS] for d in r.docs]
         for i in range(0, len(texts), 16):
             vecs += llm.embed(texts[i:i + 16], timeout=600)
             _EMB["done"] = len(vecs)
@@ -512,6 +524,23 @@ def agent_log(rec: dict) -> dict:
     with open(f, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(dict(rec, t=time.time()), ensure_ascii=False) + "\n")
     return {"ok": True, "file": str(f)}
+
+
+def agent_rate(rec: dict) -> dict:
+    """👍 / 👎 on an agent answer, by the run's uid (the run itself is in the month's file)."""
+    try:
+        rating = int(rec.get("rating"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "rating is 1 or -1"}
+    if rating not in (1, -1) or not str(rec.get("uid") or "").strip():
+        return {"ok": False, "error": "uid and rating (1 / -1) are required"}
+    d = CONFIG_DIR / "agent-runs"
+    d.mkdir(parents=True, exist_ok=True)
+    row = {"uid": str(rec["uid"])[:40], "rating": rating, "note": str(rec.get("note") or "")[:2000],
+           "message": str(rec.get("message") or "")[:2000], "final": str(rec.get("final") or "")[:4000], "t": time.time()}
+    with open(d / "ratings.jsonl", "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return {"ok": True}
 
 
 def llm_up() -> bool:
@@ -923,7 +952,7 @@ class McpRelay:
         with self.cv:
             self.n += 1
             jid = f"j{self.n}"
-            self.jobs.setdefault(client, []).append({"id": jid, "op": op, "args": args or {}})
+            self.jobs.setdefault(client, []).append({"id": jid, "op": op, "args": args or {}, "timeout": timeout})
             self.waiting.add(jid)
             self.cv.notify_all()
             start = time.time()
@@ -1368,6 +1397,8 @@ def make_handler():
                     return self._out(200, {"ok": not err, "args": args, "error": err})
                 if path == "/api/agent/log":
                     return self._out(200, agent_log(data))
+                if path == "/api/agent/rate":
+                    return self._out(200, agent_rate(data))
                 return self._out(404, {"ok": False, "error": "unknown api"})
             if path.startswith("/api/board/"):
                 if not CFG["features"].get("fpga"):

@@ -27,6 +27,7 @@ gen_*.py ──tasks.jsonl──▶ run.js ──▶ private app (launcher/app.p
 | `nl_fix` | `gen_fix.py` | a wrong circuit is on the sheet (one realistic slip) + what it should do → spec from the request → read the mismatching rows → rebuild | truth table |
 | `nl_compose` | `gen_compose.py` | "make Y from N × X" (ripple adders, 2N-bit adder from two N-bit, mux 4:1 / 8:1) → ONE `build_hierarchy` with every wire | the function (`compare_sheets`, or 400 random sums when too wide) |
 | `nl_pins` | `gen_pins.py` | switches / buttons / LEDs named in Thai → `set_pins` → check | the sheet's pin map |
+| `nl_exam` | `gen_exam.py` | **eval only**: lab-exam style requests (running LEDs, counters through primes / step 3 / Fibonacci / squares / counting down, PWM, letters on the 7-seg, a text scrolling over the 4 digits, two's complement → sign + magnitude, 2x + 8, power of two, divisible by 3) with every port and the start state named | a clock-by-clock stream or every row, computed by the generator's own reference models (not the app's part library); `tests/editor/parts-exam.spec.js` shows the library parts pass them and a wrong circuit does not |
 | `qa` | `gen_qa.py` | a question answered directly (no tool): bases, two's complement, BCD, Gray, rows, flip-flops for mod-m, 50 MHz dividers, EDGE 7-seg (active-low), K-map minimum SOP | no tool call; the answer computed here |
 | `qa_mode` | `gen_qamode.py` | the chat's **ถาม-ตอบ** mode: concept questions about the course (from every RAG note: chapters, board, VHDL, labs) answered in Thai, plus `gen_qa.py`'s computed questions — in the exact prompt Q&A mode sends (`chat_server.ask_messages`: system prompt + 3 retrieved notes + the editor's wrapping) | prose: written by an **open-weight** model (Qwen3.5-397B-A17B, Apache-2.0, via OpenRouter), kept only when two judges of other families (DeepSeek V4 Pro, GLM-5.3) both find it fully correct, plus code filters (Thai, no markdown, board facts, no "this circuit" questions); computed rows: the program's answer |
 | `general_thai` | `online.py` | keeps Thai fluency: airesearch/wangchanx-seed-free-synthetic-instruct-thai-120k (MIT), rating ≥ 8.2, grounded rows first, garbled / creative-style rows filtered | filters (see the file) |
@@ -42,6 +43,7 @@ npm install                                   # Playwright (as for the tests)
 python3 tools/dataset/gen_logic.py --n 3000 --seed 1 > tasks_logic.jsonl      # same for gen_fsm / gen_fix / …
 node tools/dataset/run.js --tasks tasks_logic.jsonl --out runs/logic           # ~2–12 s per task
 pip install pyarrow && python3 tools/dataset/online.py --cache /tmp/hf --out runs/online
+python3 tools/dataset/gen_exam.py > tasks_exam.jsonl                        # eval split only
 python3 tools/dataset/gen_qa.py --n 1500 --seed 31 > qa_for_qamode.jsonl
 OR_KEY=… python3 tools/dataset/gen_qamode.py --out runs/qamode --per-chunk 8 --computed qa_for_qamode.jsonl
 python3 tools/dataset/build_dataset.py --runs runs/* --online runs/online --tasks tasks_*.jsonl \

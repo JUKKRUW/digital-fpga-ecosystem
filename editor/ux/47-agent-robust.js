@@ -74,6 +74,8 @@ function agrPinTarget(t){
   if(m) return ({switch:"sw", "สวิตช์":"sw", btn:"pb", button:"pb", "ปุ่ม":"pb", digit:"an", "หลัก":"an"}[m[1]]||m[1])+":"+(+m[2]);
   m=/^(?:seg|7seg|segment)[:_\-\[(]?([a-g]|dp)[\])]?$/.exec(s);
   if(m) return "seg:"+m[1];
+  m=/^lcd[:_\-]?(?:data|d)?[\[(]?(\d)[\])]?$/.exec(s); if(m) return "lcd:d"+m[1];
+  m=/^lcd[:_\-]?(rs|e|en)$/.exec(s); if(m) return "lcd:"+(m[1]==="en"?"e":m[1]);
   return t;
 }
 {
@@ -83,7 +85,7 @@ function agrPinTarget(t){
     try{ return _sp(Object.assign({}, a, {map})); }
     catch(e){
       if(/is not a valid (input|output) target/.test(String(e.message)))
-        mcpFail(e.message, "targets: inputs sw:0–sw:15, pb:0–pb:4 (top bottom left right center), clk · outputs led:0–led:15, seg:a–seg:g, seg:dp, an:0–an:3 — e.g. {\"a\":\"sw:0\", \"y\":\"led:3\"}");
+        mcpFail(e.message, "targets: inputs sw:0–sw:15, pb:0–pb:4 (top bottom left right center), clk · outputs led:0–led:15, seg:a–seg:g, seg:dp, an:0–an:3, buzzer, lcd:d0–lcd:d7, lcd:rs, lcd:e, vga:hs/vs/r0–b3, uart:txd/rxd, j5:5–j5:20 (board_pins lists all) — e.g. {\"a\":\"sw:0\", \"y\":\"led:3\"}");
       throw e;
     }
   };

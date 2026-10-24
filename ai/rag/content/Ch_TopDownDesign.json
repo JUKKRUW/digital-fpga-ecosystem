@@ -1,0 +1,191 @@
+{
+ "source": "Ch_TopDownDesign.pdf",
+ "group": "content",
+ "chapter": "TD",
+ "title": "Top-Down Design (HH:MM clock example)",
+ "chunks": [
+  {
+   "id": "td-1-method",
+   "section": "TD-1",
+   "topic": "Top-down design method (HH:MM clock example)",
+   "type": "method",
+   "summary": "Top-down design starts from the whole system as one block with its ports, then splits it layer by layer into sub-blocks until every block is a simple known part (counter, mux, decoder).",
+   "text": "Top-down design starts with the whole system as a single block that shows only its inputs and outputs (the top layer), then repeatedly breaks each block into smaller blocks connected by named signals with stated widths (2nd layer, 3rd layer, ...) until every block is something simple and known — a counter, a multiplexer, a decoder, a divider. Each layer is drawn as a dashed frame named after the block it details, with its ports on the frame. Unknowns found while splitting (marked '?') become new signals or new blocks in the next refinement. The course example designs a clock that shows HH:MM on a 4-digit 7-segment display.",
+   "keywords": [
+    "top-down design",
+    "hierarchy",
+    "block diagram",
+    "layer",
+    "module",
+    "decomposition",
+    "ออกแบบจากบนลงล่าง",
+    "Top layer",
+    "ชั้นบนสุด",
+    "input output ทั้งหมด",
+    "ระบุ input และ output ทั้งหมดของวงจรหลัก"
+   ],
+   "pages": [
+    1,
+    2,
+    3
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "td-2-top-layer",
+   "section": "TD-2",
+   "topic": "Clock example: top layer and 2nd layer",
+   "type": "example",
+   "summary": "TheClock: input CLK, outputs Segment[a:g] (7) and Common[3:0] (4); 2nd layer = ClockHH_MM (counts time from CLK_1Sec) + Display (drives the 7-seg).",
+   "text": "Top layer: block TheClock with input CLK and outputs Segment[a:g] (7 bits) and Common[3:0] (4 bits, digit select of the 4-digit display). 2nd layer: TheClock splits into ClockHH_MM, which keeps the time from a 1-second clock CLK_1Sec, and Display, which drives Segment and Common. The signals between them were refined in steps. Option 1: Hour (5 bits, 0-23) and Minute (6 bits, 0-59) as binary — then Display would need a binary-to-BCD converter. Option 2: four BCD digits Hour10 (2 bits), Hour1 (4), Minute10 (3), Minute1 (4) into Display inputs H1, H2, M1, M2. Option 2.1: every digit made 4 bits wide so the display treats all four digits alike. Display outputs Data (7) to Segment[a:g] and Digit (4) to Common[3:0].",
+   "keywords": [
+    "TheClock",
+    "ClockHH_MM",
+    "Display",
+    "Segment",
+    "Common",
+    "BCD",
+    "Hour10",
+    "Minute1",
+    "นาฬิกา",
+    "ชั่วโมง นาที"
+   ],
+   "pages": [
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "td-3-display",
+   "section": "TD-3",
+   "topic": "Clock example: Display layer (multiplexed 7-segment)",
+   "type": "example",
+   "summary": "Display = a 4-to-1 mux of 4-bit digits (H1, H2, M1, M2) selected by a 2-bit Counter0_3 clocked by ScanCLK, the mux output into BCDto7Seg (Data[6:0]) and the count into Decoder2_4 (Digit[3:0]).",
+   "text": "3rd layer (Display): the four 4-bit digits H1, H2, M1, M2 go to inputs 0-3 of a 4-to-1 multiplexer (4 bits wide) whose output Y (4 bits) feeds BCDto7Seg (BCD in, Segments out → Data[6:0], 7 bits). The mux select Sel (2 bits) must step through 0..3 continuously, so a new block Counter0_3 counts on a new clock ScanCLK; its 2-bit Count drives Sel and also Decoder2_4, whose 4 outputs are Digit[3:0] and turn on the digit being shown. Only one digit is lit at a time, but scanning fast enough makes all four look lit (persistence of vision). ScanCLK became a new input of Display, which was added back into the 2nd layer (Option 2.1 updated).",
+   "keywords": [
+    "Display",
+    "multiplex",
+    "scan",
+    "mux 4-to-1",
+    "BCDto7Seg",
+    "Decoder2_4",
+    "Counter0_3",
+    "ScanCLK",
+    "persistence of vision",
+    "สแกนหลัก",
+    "แสดงผล 7-segment หลายหลัก"
+   ],
+   "pages": [
+    8,
+    9,
+    10,
+    11
+   ],
+   "needs_figure": false,
+   "related_labs": [
+    "Lab6",
+    "Lab7"
+   ]
+  },
+  {
+   "id": "td-4-clockhhmm",
+   "section": "TD-4",
+   "topic": "Clock example: ClockHH_MM layer (cascaded counters)",
+   "type": "example",
+   "summary": "ClockHH_MM chains Counter0_9 (M2), Counter0_5 (M1), Counter0_9 (H2), Counter0_2 (H1), each clocked by the previous TC; widths padded to 4 bits with constants ('0' & Minute10[2:0], \"00\" & Hour10[1:0]).",
+   "text": "3rd layer (ClockHH_MM): four counters in a chain driven by CLK_1Sec: Counter0_9 for the minute units (M2, 4-bit count), Counter0_5 for minute tens (M1, 3 bits), Counter0_9 for hour units (H2, 4 bits) and Counter0_2 for hour tens (H1, 2 bits). Each counter's terminal count TC clocks the next one. The counts are wider or narrower than the 4-bit outputs, so the padding is drawn explicitly: Minute10[3] is tied to '0' and Minute10[2:0] comes from the 3-bit count; Hour10[3:2] is \"00\" and Hour10[1:0] from the 2-bit count. (A real 24-hour clock also needs the hour pair to reset at 23→00, which this simple chain does not do — one of the details to fix while refining.)",
+   "keywords": [
+    "ClockHH_MM",
+    "Counter0_9",
+    "Counter0_5",
+    "Counter0_2",
+    "terminal count",
+    "TC",
+    "cascade",
+    "constant",
+    "padding",
+    "ตัวนับต่อกัน"
+   ],
+   "pages": [
+    12,
+    13,
+    14,
+    15
+   ],
+   "needs_figure": true,
+   "figure_note": "Dashed ClockHH_MM frame: CLK_1Sec → Counter0_9 (M2) → TC → Counter0_5 (M1) → TC → Counter0_9 (H2) → TC → Counter0_2 (H1); counts 4/3/4/2 bits routed to outputs Minute1, Minute10 (with '0' as bit 3), Hour1, Hour10 (with \"00\" as bits 3:2).",
+   "related_labs": [
+    "Lab6",
+    "Lab7"
+   ]
+  },
+  {
+   "id": "td-5-dividers",
+   "section": "TD-5",
+   "topic": "Clock example: clock dividers and the full design",
+   "type": "example",
+   "summary": "With a 1 MHz board clock, Div1M divides to CLK_1Sec (1 Hz) and a second divider makes ScanCLK for the display; the 'All Layer' drawing shows every block inside TheClock.",
+   "text": "Option 2.11 adds the clocks: the board clock CLK (1 MHz in the example) feeds Div1M, a divide-by-1,000,000 counter, whose output is CLK_1Sec for ClockHH_MM, and a second divider (Div??, ratio to choose) whose output is ScanCLK for Display's scan counter. The top layer becomes TheClock with input CLK(1MHz) and outputs Segment[a:g], Common[3:0]. The 'All Layer' drawing nests every frame: TheClock contains Div1M, Div??, ClockHH_MM (four chained counters) and Display (mux, BCDto7Seg, Counter0_3, Decoder2_4), with output buses Data[6:0] and Digit[3:0]. Suggested add-on features: show seconds, set the time, alarm clock, snooze. (On the EDGE Spartan-7 board the clock is 50 MHz, so the dividers are ÷50,000,000 for 1 Hz and a few kHz for scanning.)",
+   "keywords": [
+    "clock divider",
+    "Div1M",
+    "ScanCLK",
+    "1 Hz",
+    "top layer",
+    "all layer",
+    "alarm",
+    "set time",
+    "หารความถี่",
+    "สัญญาณนาฬิกา 1 วินาที"
+   ],
+   "pages": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ],
+   "needs_figure": true,
+   "figure_note": "All layers in one drawing: CLK(1MHz) → Div1M → ClockHH_MM (Counter0_9, Counter0_5, Counter0_9, Counter0_2) → four 4-bit buses into Display's mux → BCDto7Seg → Data[6:0]; CLK → Div?? → Counter0_3 → mux Sel and Decoder2_4 → Digit[3:0].",
+   "related_labs": [
+    "Lab6",
+    "Lab7"
+   ]
+  },
+  {
+   "id": "td-6-drawing-rules",
+   "section": "TD-6",
+   "topic": "How to draw a top-down block diagram",
+   "type": "method",
+   "summary": "Each layer: a dashed frame named after the block, ports outside on the frame, blocks named above the box, buses drawn with a slash and width, clock inputs with a wedge, constants as '0' / \"00\".",
+   "text": "Drawing conventions used in the course's top-down diagrams: each layer is a dashed rectangle with the block's name at the top-left; external ports sit outside the frame with their names (bus ports written name[msb:lsb]); each sub-block is a solid box with its type name above it and its pin names inside; a multi-bit wire carries a short slash with its width (4, 7, 2); a clock input has a triangle (wedge); fixed values are written as '0' or \"00\" at a wire end; a bus split or merge shows the bit range on each branch (Hour10[3:2], Hour10[1:0]). Signals keep the same name across layers so the layers can be checked against each other. The app's Top-Down view (Tools ▸ Top-Down) draws sheets this way.",
+   "keywords": [
+    "block diagram",
+    "dashed frame",
+    "bus width",
+    "slash",
+    "clock wedge",
+    "notation",
+    "Top-Down",
+    "วาดบล็อกไดอะแกรม",
+    "สัญลักษณ์บัส"
+   ],
+   "pages": [
+    13,
+    15,
+    19
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  }
+ ]
+}

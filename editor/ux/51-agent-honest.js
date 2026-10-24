@@ -58,3 +58,23 @@ async function aiagUnansweredFinish(run, content, needCheck, needSim){
     "ยังไม่มีการจำลองว่าวงจรทำงานตรงตามที่ขอ — เปิดหน้าจำลองดูเอง หรือสั่งใหม่ว่า \"จำลองแผ่น "+(sheets[0]||"…")+"\""+
     (said ? "\n\nข้อความจากโมเดล (ยังไม่ได้ตรวจ):\n"+said : "");
 }
+
+/* the final answer against what the tools actually returned: "ผ่าน 1,000 จาก 1,000" / "16/16 rows" and
+   "แผ่น X" must be found in the run's tool results / the project, else the answer gets a ⚠ naming them */
+function aiagFactGuard(run, final){
+  const t=String(final||""); if(/^⚠/.test(t)) return t;
+  const seen=(run.steps||[]).filter(x=>x.kind==="tool").map(x=>String(x.result||"")+" "+String(x.summary||"")+" "+JSON.stringify(x.args||{})).join("\n");
+  const nums=s=>String(s).replace(/,/g,"");
+  const bad=[];
+  for(const m of t.matchAll(/(\d[\d,]*)\s*(?:\/|จาก|ใน|of|out of)\s*(\d[\d,]*)/gi)){
+    const a=nums(m[1]), b=nums(m[2]); if(a.length>6 || b.length>6 || +b<2) continue;
+    const hasB=new RegExp("(^|\\D)"+b+"(\\D|$)").test(seen), hasA=new RegExp("(^|\\D)"+a+"(\\D|$)").test(seen);
+    if(!hasB || (!hasA && a!==b)) bad.push(m[0].trim()); }
+  const P=Object.values(((state||{}).project||{}).schematics||{}).map(s=>String(s.name).toLowerCase());
+  for(const m of t.matchAll(/(?:แผ่น|ชีต|ชีท|sheet)\s*[`"'“]?([A-Za-z_][A-Za-z0-9_]*)/gi)){
+    const n=m[1]; if(/^(top|ใหม่|new|this|นี้)$/i.test(n)) continue;
+    if(!P.includes(n.toLowerCase()) && !new RegExp("\\b"+n+"\\b", "i").test(seen)) bad.push("แผ่น "+n); }
+  const uniq=[...new Set(bad)].slice(0,4); if(!uniq.length) return t;
+  run.steps.push({kind:"nudge", text:"the answer names things no tool returned — flagged: "+uniq.join(", ")});
+  return "⚠ ในคำตอบมี "+uniq.map(x=>`“${x}”`).join(", ")+" ที่ไม่ตรงกับผลจากเครื่องมือในรอบนี้ (หรือแผ่นที่ไม่มีในโปรเจกต์) — ตรวจเองก่อนเชื่อ\n\n"+t;
+}

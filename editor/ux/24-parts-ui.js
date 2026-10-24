@@ -47,7 +47,9 @@ function partDialog(kind){
   const P=PARTS[kind]; if(!P) return;
   const params=P.params||{};
   const field=(k,s)=>{
-    const lab={n:"ขนาด (N)", cin:"มีขา cin", en:"มีขา enable", odd:"parity คี่", active_low:"active-low (บอร์ด EDGE)", output:"ขาออก"}[k]||k;
+    const lab={n:"ขนาด (N)", cin:"มีขา cin", en:"มีขา enable", odd:"parity คี่", active_low:"active-low (บอร์ด EDGE)", output:"ขาออก",
+      values:"ลำดับค่า", text:"ข้อความ", mode:"รูปแบบ", clr:"มีขา clr", set:"ชุดตัวอักษร", blank0:"รหัส 0 = ว่าง"}[k]||k;
+    if(s.text) return `<label class="pt-f">${lab} <input type="text" data-pp="${k}" value="${esc(String(s.def))}" spellcheck="false" style="width:220px"></label>`;
     if(s.bool) return `<label class="pt-f"><input type="checkbox" data-pp="${k}" ${s.def?"checked":""}> ${lab}</label>`;
     if(s.options) return `<label class="pt-f">${lab} <select data-pp="${k}">${s.options.map(o=>`<option ${o===s.def?"selected":""}>${o}</option>`).join("")}</select></label>`;
     return `<label class="pt-f">${lab} <input type="number" data-pp="${k}" value="${s.def}" min="${s.min}" max="${s.max}" style="width:${s.max>1e6?120:70}px"> <span class="muted">${s.min}–${s.max}</span></label>`;

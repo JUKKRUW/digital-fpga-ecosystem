@@ -1,0 +1,148 @@
+{
+ "source": "Ch_Recap.pdf",
+ "group": "content",
+ "chapter": "Recap",
+ "title": "Course Recap (ทบทวน)",
+ "chunks": [
+  {
+   "id": "recap-1-outline",
+   "section": "R-1",
+   "topic": "สรุปเนื้อหาก่อนสอบ (Course Recap outline)",
+   "type": "concept",
+   "summary": "บททบทวนครอบคลุม: ระบบเลขฐาน 2/8/10/16 และ BCD, ตารางความจริง, เกตพื้นฐาน, กฎพีชคณิตบูลีน, K-map, ripple counter, ตาราง excitation ของ JK, การออกแบบ synchronous counter, shift register, การบวก/ลบเลขฐานสอง, half/full adder-subtractor, MUX/DEMUX.",
+   "text": "บททบทวน (Recap) ไล่หัวข้อหลักของวิชา: การแปลงเลขระหว่างฐานสิบหก ฐานสอง ฐานแปด ฐานสิบ และเลข BCD (ฐานสองเป็นตัวกลาง: ฐานสิบหก/ฐานแปด ↔ ฐานสอง ↔ ฐานสิบ ↔ BCD); ตารางความจริง (inputs ด้านซ้าย output ด้านขวา); สัญลักษณ์เกต NOT, OR, AND, NOR, NAND, XOR, XNOR; กฎพีชคณิตบูลีน (identity 1A=A, 0+A=A; null 0A=0, 1+A=1; idempotent AA=A, A+A=A; inverse AA'=0, A+A'=1; commutative; associative; distributive A+BC=(A+B)(A+C), A(B+C)=AB+AC; absorption A(A+B)=A, A+AB=A; De Morgan (AB)'=A'+B', (A+B)'=A'B'); K-map 4 ตัวแปรที่มี don't care (X); ripple counter จาก JK-FF ที่ J=K=1 ต่อ clock แบบขอบขาลงไล่กัน; ตาราง excitation ของ JK (Q 0→0: J=0,K=X; 0→1: J=1,K=X; 1→0: J=X,K=1; 1→1: J=X,K=0) และการใช้ทำตาราง present state/next state ของ synchronous counter 3 บิต; shift register แบบ serial-in serial-out ด้วย D-FF 4 ตัว (SER_IN → SER_OUT, clock ร่วม); การบวกเลขฐานสอง (ตัวทด ตัวตั้ง ตัวบวก ผลรวม เช่น 11110 + 1100 = 101010 คือ 30+12=42); MUX 4 to 1 (S1,S0 เลือก A–D ออก Z) และ DEMUX 1 to 4.",
+   "keywords": [
+    "recap",
+    "ทบทวน",
+    "สอบ",
+    "Boolean laws",
+    "De Morgan",
+    "JK excitation",
+    "ripple counter",
+    "shift register",
+    "MUX",
+    "DEMUX"
+   ],
+   "pages": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    33
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "recap-2-adders",
+   "section": "R-2",
+   "topic": "Half adder / Full adder (ตารางความจริง)",
+   "type": "table",
+   "summary": "Full adder: Cin, A, B → Co, Sum; Sum = 1 เมื่อจำนวน 1 เป็นคี่, Co = 1 เมื่อมี 1 อย่างน้อยสองตัว (Sum = A⊕B⊕Cin, Co = AB + Cin(A⊕B)).",
+   "text": "Half adder บวก A + B สองบิต ได้ Sum = A⊕B และตัวทด Co = AB. Full adder บวก Cin + A + B: ตารางความจริง (Cin A B → Co Sum) 000→00, 001→01, 010→01, 011→10, 100→01, 101→10, 110→10, 111→11. ดังนั้น Sum = A⊕B⊕Cin (เป็น 1 เมื่อจำนวน 1 ในอินพุตเป็นคี่) และ Co = AB + Cin(A⊕B) (เป็น 1 เมื่อมี 1 อย่างน้อยสองตัว). ต่อ full adder หลายตัวโดยส่ง Co ของบิตล่างไปเป็น Cin ของบิตถัดไปได้ตัวบวกหลายบิต (ripple-carry adder).",
+   "keywords": [
+    "half adder",
+    "full adder",
+    "Sum",
+    "carry",
+    "Co",
+    "Cin",
+    "ตัวบวก",
+    "ตัวทด"
+   ],
+   "pages": [
+    16,
+    17,
+    18,
+    19
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "recap-3-subtractors",
+   "section": "R-3",
+   "topic": "Half subtractor / Full subtractor (ตัวลบ ตัวยืม)",
+   "type": "table",
+   "summary": "Half subtractor A − B: Diff = A⊕B, Bo = A'B; Full subtractor (Bor_in, A, B): Diff = A⊕B⊕Bin, Bo = A'B + Bin(A⊕B)'.",
+   "text": "Half subtractor ลบ A (ตัวตั้ง) − B (ตัวลบ): ตาราง A B → Bo Diff: 00→00, 01→11, 10→01, 11→00 ดังนั้นผลต่าง Diff = A⊕B และตัวยืมออก Bo = A'B (ยืมเมื่อ 0 − 1). Full subtractor มีตัวยืมเข้า Bor_in ด้วย: ตาราง (Bor_in A B → Bor_out Diff) 000→00, 001→11, 010→01, 011→00, 100→11, 101→10, 110→00, 111→11. ได้ Diff = A⊕B⊕Bin และ Bo = A'B + A'Bin + B·Bin = A'B + Bin(A⊕B)'. ต่อหลายตัวโดยส่งตัวยืมออกของบิตล่างไปเป็นตัวยืมเข้าของบิตถัดไป.",
+   "keywords": [
+    "half subtractor",
+    "full subtractor",
+    "borrow",
+    "Diff",
+    "ตัวลบ",
+    "ตัวยืม",
+    "ผลต่าง"
+   ],
+   "pages": [
+    20,
+    21,
+    22
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "recap-4-ones-complement-sub",
+   "section": "R-4",
+   "topic": "การลบเลขฐานสองด้วยวิธี 1's complement (End-around carry)",
+   "type": "method",
+   "summary": "ลบ A − B: บวก A กับ 1's complement ของ B; ถ้ามีตัวทดหลักซ้ายสุด ผลเป็นบวก ให้นำตัวทดไปบวกกลับ (end-around carry, EAC); ถ้าไม่มีตัวทด ผลเป็นลบ ให้ทำ 1's complement ของผลอีกครั้งแล้วใส่เครื่องหมายลบ.",
+   "text": "1's complement คือการกลับทุกบิต (0→1, 1→0). ขั้นตอนลบ A − B ด้วยวิธี 1's complement: (1) แปลงตัวลบ B เป็น 1's complement (ให้จำนวนบิตเท่าตัวตั้ง); (2) นำตัวตั้งบวกกับผลจากข้อ 1 แล้วพิจารณาผล: (2.1) ถ้ามีตัวทดเกิดจากหลักซ้ายสุด (overflow) แสดงว่าคำตอบเป็นบวก ให้นำบิตตัวทดนั้นไปบวกกับผลที่ได้ (end-around carry, EAC); (2.2) ถ้าไม่มีตัวทด แสดงว่าคำตอบเป็นลบ หาคำตอบโดยทำ 1's complement ของผลอีกครั้งแล้วใส่เครื่องหมายลบ. ตัวอย่าง 11001 − 10001 (25 − 17): 11001 + 01110 = 1 00111 มีตัวทด → 00111 + 1 = 01000 = +8. ตัวอย่าง 101 − 11000 (5 − 24): 00101 + 00111 = 01100 ไม่มีตัวทด → 1's complement ของ 01100 คือ 10011 → −10011 = −19.",
+   "keywords": [
+    "1's complement",
+    "one's complement",
+    "end-around carry",
+    "EAC",
+    "การลบเลขฐานสอง",
+    "binary subtraction",
+    "overflow"
+   ],
+   "pages": [
+    23,
+    24,
+    25,
+    26
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "recap-5-twos-complement-sub",
+   "section": "R-5",
+   "topic": "การลบเลขฐานสองด้วยวิธี 2's complement และวิธีลัด",
+   "type": "method",
+   "summary": "2's complement = 1's complement + 1 (วิธีลัด: คงบิตจากขวาจนถึง 1 ตัวแรกไว้ แล้วกลับบิตที่เหลือ); ลบ A − B: บวก A กับ 2's complement ของ B; มีตัวทดทิ้งไป ผลเป็นบวก; ไม่มีตัวทด ผลเป็นลบ ทำ 2's complement ของผลอีกครั้ง.",
+   "text": "2's complement ของเลขฐานสองคือ 1's complement แล้วบวก 1 เช่น 2's complement ของ 1011101: 1's complement = 0100010, บวก 1 = 0100011. วิธีลัด: อ่านจากขวาไปซ้าย คงบิตเดิมไว้จนถึงเลข 1 ตัวแรก (รวม 1 ตัวนั้น) แล้วกลับบิตที่เหลือทั้งหมด (เช่น 110001110 → 001110010, 10110001 → 01001111, 111000100 → 000111100). ขั้นตอนลบ A − B ด้วยวิธี 2's complement: (1) แปลงตัวลบเป็น 2's complement; (2) นำตัวตั้งบวกกับผลนั้น; (I) ถ้าเกิดตัวทดจากการบวก คำตอบเป็นบวก ให้ตัดบิตตัวทดทิ้งไป ผลบวกที่เหลือคือคำตอบ; (II) ถ้าไม่มีตัวทด คำตอบเป็นลบ หาขนาดโดยทำ 2's complement ของผลอีกครั้ง. ตัวอย่าง 10010 − 11000 (18 − 24): 10010 + 01000 = 11010 ไม่มีตัวทด → 2's complement ของ 11010 คือ 00110 → −110 = −6.",
+   "keywords": [
+    "2's complement",
+    "two's complement",
+    "การลบเลขฐานสอง",
+    "binary subtraction",
+    "วิธีลัด",
+    "signed number"
+   ],
+   "pages": [
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  }
+ ]
+}
