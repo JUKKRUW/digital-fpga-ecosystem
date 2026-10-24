@@ -170,6 +170,7 @@ nav .badge:empty{display:none}
       <div class="bar" style="margin-top:6px"><input type="text" id="llmImportPath" style="flex:1;min-width:0" placeholder="นำเข้าไฟล์ .gguf ที่มีอยู่ เช่น C:\Users\…\Downloads\qwen3.5-4B-SFT1.gguf"><button class="btn" id="llmImport">นำเข้าไฟล์ .gguf</button></div></div></div>
     <div class="step"><b>3</b><div class="grow"><div class="st-h">เริ่มใช้งาน</div>
       <div class="bar"><button class="btn primary" id="llmStart">เริ่มโมเดล</button><button class="btn" id="llmStop">หยุด</button><span class="muted" id="llmMsg"></span></div></div></div>
+    <div class="bar" id="llmMem" style="margin-top:6px"></div>
     <div class="prog" id="llmProg" hidden><div class="prog-bar"><i></i></div><span class="muted"></span><button class="btn" id="llmCancel">ยกเลิก</button></div>
     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">log ของ llama-server</summary><pre class="log" id="llmLog"></pre></details>
   </div>
@@ -398,6 +399,13 @@ async function loadLlm(){
       : dl.phase==="extracting" ? "กำลังแตกไฟล์…" : `${dl.what==="llama"?"llama.cpp":dl.what} · ${gb(dl.done)}${dl.total?" / "+gb(dl.total):""}`;
     $("#llmCancel").hidden = !busy;
   }
+  // memory: every llama-server on this machine (the chat model, the search model, leftovers)
+  const P = (LLM.processes||[]).filter(p=>p.mb>0), ePath = E && E.path;
+  $("#llmMem").innerHTML = P.length ? "หน่วยความจำ: " + P.map(p => {
+      const what = !p.ours ? "ค้างจากครั้งก่อน" : (p.args||"").includes("--embedding") || (ePath && (p.args||"").includes(ePath)) ? "ตัวค้นความหมาย" : "โมเดลแชต";
+      return `<span class="chip ${p.ours?"":"warn"}">${what} ${(p.mb/1024).toFixed(1)} GB</span>`; }).join(" ")
+      + (E && E.running ? ` <button class="btn" id="llmStopEmbed" title="ปิดตัวค้นความหมาย (ค้นแบบคำต่อได้ · เปิดเองเมื่อค้นครั้งหน้า · ปิดเองหลังว่าง 10 นาที)">ปิดตัวค้นความหมาย</button>` : "")
+    : "";
   $("#llmLog").textContent = LLM.log || "—";
   clearTimeout(LLM_T);
   LLM_T = setTimeout(loadLlm, busy || LLM.state==="loading" ? 1000 : 5000);
@@ -412,6 +420,7 @@ $("#llmCard").addEventListener("click", async e => {
     if(r.ok){ LLM_SEL = r.path; $("#llmImportPath").value = ""; toast(r.already ? "มีไฟล์นี้อยู่แล้ว — เลือกไว้ให้แล้ว" : "กำลังคัดลอกโมเดลเข้าโปรแกรม…"); } }
   else if(b.id==="llmCancel") r = await api("/api/llm/cancel", {});
   else if(b.id==="llmStop") r = await api("/api/llm/stop", {});
+  else if(b.id==="llmStopEmbed") r = await api("/api/llm/stop_embed", {});
   else if(b.id==="llmStart"){ r = await api("/api/llm/start", {model:LLM_SEL});
     if(r.ok){ CFG = await api("/api/config"); fillSettings(); toast("กำลังเริ่มโมเดล…"); } }
   else return;

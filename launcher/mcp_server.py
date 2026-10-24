@@ -123,6 +123,8 @@ TOOLS = [
     T("delete_sheet", "Delete a sheet (undo brings it back). Refused when another sheet uses it as a block, unless "
       "force (the block instances go too); the last sheet stays.", {"sheet": SHEET, "force": {"type": "boolean"}}, ["sheet"]),
     T("rename_sheet", "Rename a sheet.", {"sheet": SHEET, "name": {"type": "string"}}, ["sheet", "name"]),
+    T("lock_sheet", "Lock a sheet against the in-app agent (the chat's เอเจนต์ mode refuses to change it; you and the user still can), "
+      "or unlock it with lock:false. Shown as 🔒 in the project tree.", {"sheet": SHEET, "lock": {"type": "boolean"}}, ["sheet"]),
     T("set_top_sheet", "Choose which sheet is the top entity (what goes to the board).", {"sheet": SHEET}, ["sheet"]),
     # --- editing
     T("add_component", "Place one component. type: a type from list_component_types (AND, OR, NOT, XOR, NAND, NOR, "
@@ -322,7 +324,9 @@ TOOLS = [
       {"sheet": SHEET, "expected": {"type": "object"}, "formula": {"type": ["string", "array"], "items": {"type": "string"}}}),
     T("probe", "Set inputs and read every net's value (combinational evaluation) — find where a signal goes wrong. "
       "A bus INPUT takes its whole value: 5, \"0101\" (binary as wide as the bus), \"0b0101\" or \"0x5\" — so does a numbered "
-      "group of 1-bit INPUTs (sw0..sw15 → sw: \"0x1260\"); "
+      "group of 1-bit INPUTs (sw0..sw15 → sw: \"0x1260\"); a bit range takes its own value: \"sw[3:0]\": \"1111\", \"sw[5]\": 1. "
+      "When the user names bits (\"sw0 ถึง sw3 เป็น 1\"), set exactly those bits ({\"sw[3:0]\": \"1111\"} or sw0..sw3: 1) — never work out a "
+      "number for them; answer from the `inputs` / `outputs` the probe returns; "
       "a bus OUTPUT comes back as {value, bin}. Comparators, encoders, decoders, (de)muxes, bus taps are all evaluated. "
       "inside:'u' (or a path 'u/v') gives the nets and ports INSIDE that block instead, with its inputs from the whole circuit.",
       {"sheet": SHEET, "inputs": INPUTS, "inside": {"type": "string", "description": "a block on the sheet (label / name), or a path u/v"}}),

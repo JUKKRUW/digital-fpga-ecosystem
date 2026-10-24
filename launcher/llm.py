@@ -34,6 +34,9 @@ LLAMA_PINNED = "b11016"     # used when the GitHub API can't be reached (rate li
 
 HF = "https://huggingface.co"
 CATALOG = [
+    {"id": "qwen3.5-4b-sft2", "name": "Qwen3.5 4B · ฝึกกับแอปนี้ (SFT2)", "size_gb": 3.5, "agent": True, "trained": True,
+     "note": "ฝึกต่อจากรุ่นแรก · ต่อสาย / แตกบล็อก / กู้ตัวจาก error / ตรวจก่อนตอบ ดีขึ้น (eval 41 % → 83 %) · การ์ดจอ 4–6 GB",
+     "file": "qwen3.5-4B-SFT2.gguf", "url": ""},
     # fine-tuned on this app's own agent / Q&A conversations (tools/dataset, train_lora.py): same tools, same
     # system prompt. Not hosted yet ("url" empty): the file is added with "นำเข้าไฟล์ .gguf" (import_model)
     {"id": "qwen3.5-4b-sft1", "name": "Qwen3.5 4B · ฝึกกับแอปนี้ (SFT1)", "size_gb": 3.5, "agent": True, "trained": True,
@@ -393,12 +396,13 @@ def llama_processes(fresh: bool = False) -> list:
     if os.name == "nt":
         try:
             ps = ("Get-CimInstance Win32_Process -Filter \"name='llama-server.exe'\" | "
-                  "Select-Object ProcessId,ExecutablePath,WorkingSetSize | ConvertTo-Json -Compress")
+                  "Select-Object ProcessId,ExecutablePath,WorkingSetSize,CommandLine | ConvertTo-Json -Compress")
             r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=15, creationflags=_NO_WINDOW)
             data = json.loads(r.stdout.decode("utf-8", "replace") or "[]")
             for d in ([data] if isinstance(data, dict) else data or []):
                 out.append({"pid": int(d.get("ProcessId") or 0), "path": d.get("ExecutablePath") or "",
-                            "mb": round(int(d.get("WorkingSetSize") or 0) / 2**20)})
+                            "mb": round(int(d.get("WorkingSetSize") or 0) / 2**20),
+                            "args": str(d.get("CommandLine") or "")[:400]})
         except Exception:
             pass
     else:
@@ -409,7 +413,8 @@ def llama_processes(fresh: bool = False) -> list:
                 if not prog:
                     continue
                 rss = next((int(x.split()[1]) for x in (d / "status").read_text().splitlines() if x.startswith("VmRSS:")), 0)
-                out.append({"pid": int(d.name), "path": prog, "mb": round(rss / 1024)})
+                out.append({"pid": int(d.name), "path": prog, "mb": round(rss / 1024),
+                            "args": " ".join(x.decode("utf-8", "replace") for x in args[1:])[:400]})
             except Exception:
                 continue
     for p in out:

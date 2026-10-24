@@ -49,3 +49,36 @@ test("numbers and sheets in the final answer must come from the tool results", a
   expect(r.ok).toBe("ตรวจผ่าน 16/16 แถว");
   expect(r.bad).toMatch(/^⚠.*1,000 จาก 1,000.*แผ่น ghost/s);
 });
+
+test("SFT2 report: probe facts in the answer, unchanged re-check, long simulate, no fast path over an existing sheet, locked sheets", async ({ page }) => {
+  await openEditor(page);
+  const r = await page.evaluate(async () => {
+    await MCP_OPS.build_circuit({ sheet: "errs", formula: "err = sw0 & sw1 & sw2 & sw3" });
+    const pr = MCP_OPS.probe({ sheet: "errs", inputs: { "sw[3:0]": "1111" } });
+    const run = { steps: [{ kind: "tool", tool: "probe", ok: true, full: { inputs: pr.inputs, outputs: pr.outputs } }] };
+    const wrong = aiagProbeFacts(run, "ไฟ err ไม่ติด (sw0 sw1 sw2 sw3 เป็น 1)");
+    const right = aiagProbeFacts({ steps: run.steps }, "ไฟ err ติด");
+    const c1 = await srRecheck("check", { sheet: "errs" }, async () => ({ ok: true, result: { errors: 0 } }));
+    const c2 = await srRecheck("check", { sheet: "errs" }, async () => ({ ok: true, result: { errors: 0 } }));
+    await MCP_OPS.build_part({ kind: "clock_divider", sheet: "d25", params: { n: 25 } });
+    const div = Object.values(state.project.schematics).find(s => s.name === "d25");
+    const sim = div ? MCP_OPS.simulate({ sheet: "d25" }) : null;
+    const fpRun = { steps: [] };
+    const fp = await aiagFastPath("แตก errs เป็นตัวหาร 5 สองตัว", fpRun);
+    MCP_OPS.lock_sheet({ sheet: "errs" });
+    const lockedCall = await aiagCall("build_circuit", { sheet: "errs", formula: "err = sw0", replace: true });
+    MCP_OPS.lock_sheet({ sheet: "errs", lock: false });
+    return { err: pr.outputs.err, wrong, right, c1: c1.result.unchanged, c2: c2.result.unchanged,
+      clocks: sim && sim.clocks, period: sim && Object.values(sim.summary).map(o => o.period), fp, fpNote: fpRun.steps.map(s => s.text).join(),
+      locked: lockedCall.error };
+  });
+  expect(r.err).toBe(1);
+  expect(r.wrong).toMatch(/^⚠ คำตอบด้านล่างขัดกับผล probe \(err=1\)/);
+  expect(r.right).toMatch(/ไฟ err ติด\n\n— ผลจาก probe ล่าสุด.*sw0=1.*err=1/s);
+  expect(r.c1).toBeUndefined();
+  expect(r.c2).toMatch(/Nothing on this sheet changed/);
+  expect(r.clocks).toBe(256); expect(r.period).toContain(25);
+  expect(r.fp).toBeNull();
+  expect(r.fpNote).toMatch(/existing sheet 'errs'/);
+  expect(r.locked).toMatch(/locked for the agent/);
+});
