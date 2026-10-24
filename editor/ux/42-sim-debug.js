@@ -43,7 +43,9 @@ function sdSummary(vals, names){
       if(ok && v.slice(from).some(x=>x!==v[from])) period=p; }
     const seen=[]; v.forEach(x=>{ if(!seen.includes(x) && seen.length<32) seen.push(x); });
     const o={changes, period, last:v[v.length-1]};
-    if(seen.every(x=>x===0||x===1)) o.high=+(v.filter(x=>x===1).length/v.length).toFixed(3);
+    if(seen.every(x=>x===0||x===1)){ o.high=+(v.filter(x=>x===1).length/v.length).toFixed(3);
+      // over one whole period (start-up skipped): a divider's duty, 0.5 for ÷ even N
+      if(period){ const w=v.slice(from, from+period); o.duty=+(w.filter(x=>x===1).length/period).toFixed(3); o.high_clocks=w.filter(x=>x===1).length; } }
     if(period==null && !changes) o.constant=v[0];
     o.values=seen; o.first=v.slice(0,24);
     S[n]=o; });

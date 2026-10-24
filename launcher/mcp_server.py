@@ -444,7 +444,7 @@ TOOLS = [
        "resume": {"type": "boolean", "description": "agent: continue the last run that stopped before answering (ai_chat_stop, "
                   "the step limit or the time budget) from its conversation, instead of starting over; message not needed"},
        "run_id": {"type": "integer", "description": "with resume: which run"},
-       "escalate": {"type": "boolean", "description": "agent: false = never switch to a bigger installed model when this run stalls (default: it does, and switches back after)"},
+       "escalate": {"type": "boolean", "description": "agent: true = when this run stalls, switch to the biggest installed agent model and back after (default off; localStorage schstudio.agentEscalate=1 turns it on for every run)"},
        "think": {"type": "boolean", "description": "agent: let the model reason (thinking) on its planning calls; default on, off for a fine-tuned model (trained without it)"},
        "temperature": {"type": "number", "minimum": 0, "maximum": 2, "description": "agent: sampling temperature (default 0.6; 0.3 for a fine-tuned model)"}}),
     T("ai_chat_status", "Wait (≤`wait` s) for the chat to finish the message sent with ai_chat, then return what "

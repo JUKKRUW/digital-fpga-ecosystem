@@ -3,9 +3,10 @@
    installed and never used. When a run stops making progress (18: stall / time budget) and a bigger
    agent model is installed, the app restarts llama-server with it, the SAME conversation continues
    (tools, sheets and the plan so far), and the small model comes back when the run is over — the
-   next routine request is fast again. Off: localStorage schstudio.agentEscalate = "0", or
-   ai_chat {escalate:false}. */
-const AIAG_ESC = { on:(()=>{ try{ return localStorage.getItem("schstudio.agentEscalate")!=="0"; }catch(_){ return true; } })() };
+   next routine request is fast again. OFF by default since loading a 9B (5.7 GB) on a machine with the 4B,
+   the editor and a browser open left ~1 GB free and the page was reloaded mid-run. On: localStorage
+   schstudio.agentEscalate = "1", or ai_chat {escalate:true} for one run. */
+const AIAG_ESC = { on:(()=>{ try{ return localStorage.getItem("schstudio.agentEscalate")==="1"; }catch(_){ return false; } })() };
 async function aiagModelStatus(){ try{ return await (await fetch("/api/llm/status")).json(); }catch(_){ return null; } }
 /* the installed agent model bigger than the one running, or null */
 function aiagBigger(st){
@@ -17,7 +18,7 @@ function aiagBigger(st){
 }
 /* switch to the bigger model and wait until it answers; {from,to} or null */
 async function aiagEscalate(run, live){
-  if(!AIAG_ESC.on || run.noEscalate || run.escalated || !/^https?:/.test(location.protocol)) return null;
+  if(!(AIAG_ESC.on || run.wantEscalate) || run.noEscalate || run.escalated || !/^https?:/.test(location.protocol)) return null;
   const st=await aiagModelStatus(), b=aiagBigger(st); if(!b) return null;
   live && live(`โมเดล ${b.from.name} ติดอยู่ — สลับไป ${b.to.name}…`);
   aiagLine(`<div class="ag-step"><span class="ag-tool">⇪ สลับโมเดล</span><div class="ag-res">${esc(b.from.name)} ไม่คืบหน้า — ให้ ${esc(b.to.name)} ทำต่อจากเดิม (เปลี่ยนกลับเมื่อจบงาน)</div></div>`, "step");

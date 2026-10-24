@@ -317,3 +317,9 @@
 .vhb-status.ok{color:var(--ok,#3fb950)} .vhb-status.bad{color:var(--err,#f85149)}
 .vhb-sec .pt-h{display:flex;align-items:center;gap:8px} .vhb-new{margin-left:auto;font-size:11px}
 .vhb-row{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px} .vhb-row small{flex:1;color:var(--ink-dim,#999);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 18: 👍 / 👎 under an agent answer */
+.ag-rate{display:flex;gap:6px;align-items:center;margin:-2px 0 8px 4px;font-size:12px;color:var(--muted,#888)}
+.ag-rate button{border:1px solid transparent;background:none;cursor:pointer;font-size:14px;padding:1px 6px;border-radius:6px;opacity:.55}
+.ag-rate button:hover{opacity:1;border-color:var(--border,#ccc)}
+.ag-rate button.on{opacity:1;border-color:var(--accent,#4a7)}

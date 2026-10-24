@@ -13309,6 +13309,12 @@ init();
 .vhb-status.ok{color:var(--ok,#3fb950)} .vhb-status.bad{color:var(--err,#f85149)}
 .vhb-sec .pt-h{display:flex;align-items:center;gap:8px} .vhb-new{margin-left:auto;font-size:11px}
 .vhb-row{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px} .vhb-row small{flex:1;color:var(--ink-dim,#999);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 18: 👍 / 👎 under an agent answer */
+.ag-rate{display:flex;gap:6px;align-items:center;margin:-2px 0 8px 4px;font-size:12px;color:var(--muted,#888)}
+.ag-rate button{border:1px solid transparent;background:none;cursor:pointer;font-size:14px;padding:1px 6px;border-radius:6px;opacity:.55}
+.ag-rate button:hover{opacity:1;border-color:var(--border,#ccc)}
+.ag-rate button.on{opacity:1;border-color:var(--accent,#4a7)}
 </style>
 <script>
 "use strict";
@@ -15866,10 +15872,26 @@ async function mcpLoop(){
     // an op that only WAITS (for the user's click, a Vivado build, the chat) runs beside the others:
     // it used to hold the queue for up to 40 s, and a simulate sent meanwhile timed out
     if(MCP_WAITING_OPS.has(job.op)){ mcpRun(job, false); continue; }
-    await mcpRun(job, true);
+    await mcpRunGuarded(job);
   }
 }
 const MCP_WAITING_OPS = new Set(["ai_chat_status", "ai_chat_stop", "approval_status", "board_status", "get_events"]);
+/* an op that awaits something that never comes (a model call on a machine out of RAM, a fetch with no answer)
+   held the whole queue — every later call "did not pick up" for ~30 min and only a reload freed it. Past its
+   caller's timeout (+30 s) the queue moves on: the caller gets an error now, the op may still finish later. */
+async function mcpRunGuarded(job){
+  const lim=Math.max(30, +job.timeout||60)+30;
+  let timer=null;
+  const late=new Promise(res=>{ timer=setTimeout(()=>res("late"), lim*1000); });
+  const r=await Promise.race([mcpRun(job, true).then(()=>"done"), late]);
+  clearTimeout(timer);
+  if(r!=="late") return;
+  MCPB.busy=false;
+  console.warn("mcp op still running after", lim, "s — queue released:", job.op);
+  try{ await fetch("/api/mcp/result", {method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id:job.id, ok:false, error:`'${job.op}' did not finish within ${lim} s — the editor moved on to the next call`,
+      hint:"it may still finish in the background; check the sheet (get_state) before calling it again"})}); }catch(_){}
+}
 async function mcpRun(job, edits){
   let reply;
   if(edits){ MCPB.busy=true; mcpRevealFlush(); }
@@ -17568,7 +17590,7 @@ async function aiAgentRun(msg, opts){
   const maxSteps=Math.max(1, Math.min(60, +opts.maxSteps||AIAG_MAX_STEPS)), budgetS=Math.max(10, +opts.budgetS||AIAG_BUDGET_S);
   const run={id:++AIAG.seq, message:prev?prev.message:msg, started:Date.now(), state:"running", steps:[], final:null, error:null,
              model_calls:0, tokens:{prompt:0, completion:0}, model_seconds:0, max_steps:maxSteps, budget_s:budgetS,
-             resumed_from:prev?prev.id:undefined, cancel:false, ctl:null, noEscalate:!!opts.noEscalate};
+             resumed_from:prev?prev.id:undefined, cancel:false, ctl:null, noEscalate:!!opts.noEscalate, wantEscalate:!!opts.wantEscalate};
   if(prev) msg=prev.message;
   AIAG.cur=run; AIAG.runs.push(run); if(AIAG.runs.length>20) AIAG.runs.shift();
   const status=aiagLine('<span class="ac-badge v">เอเจนต์</span> <span class="ag-live">กำลังคิด…</span> <button class="btn2 ag-stop" title="หยุดเอเจนต์ตอนนี้">⏹ หยุด</button>');
@@ -17604,7 +17626,7 @@ async function aiAgentRun(msg, opts){
       : [{role:"system", content:aiagSystemPrompt()+notes}, ...hist, {role:"user", content:msg}];
     run._messages=messages;
     // sheets changed and not yet checked / simulated on — the nudge names them
-    const needCheck=new Set(), needSim=new Set(), made=new Set();
+    const needCheck=new Set(), needSim=new Set(), made=new Set(); run.made=made;
     let nudges=0, unanswered=false, think=true, planned=false, circularN=0, stopAt=Infinity, stopWhy="", stall=0, gated=false;
     const built=new Set();          // sheet + what it was built from: the same rebuild twice is a loop
     let budgetStart=run.started;    // restarts when a bigger model takes over
@@ -17649,7 +17671,9 @@ async function aiAgentRun(msg, opts){
       // a plan in words but no call: the same model writes the call again under a JSON-schema grammar (49)
       if(!calls.length && typeof aiagStructuredCall==="function" && (run.structTries||0)<2 && stopAt===Infinity){
         const plan=[m.content, thought].filter(Boolean).join("\n").trim(), done=run.steps.some(x=>x.kind==="tool" && x.ok && !x.fast_path);
-        if(plan && aiagWantsChange(run.message) && (!done || /→|->|ต่อ|connect|แล้ว(ต่อ|ให้|วาง)|ต่อไป|next/i.test(plan))){
+        // after tool work, only a reply that still says what it will do NEXT is a plan: a closing summary also has
+        // "→" / "ต่อ" in it ("clk → div5 …, ต่อครบแล้ว") and was turned into a build over the top sheet
+        if(plan && aiagWantsChange(run.message) && (!done || aiagPlanAhead(plan))){
           run.structTries=(run.structTries||0)+1; live("แปลงแผนเป็นคำสั่ง…");
           const sc=await aiagStructuredCall(run, messages, plan);
           if(sc){ calls=[sc]; run.steps.push({kind:"nudge", text:`no call in the reply — ${sc.function.name} written under the tool's schema (constrained decoding)`}); } } }
@@ -17750,6 +17774,7 @@ async function aiAgentRun(msg, opts){
       run.final=String(m.content||"").trim() || (didWork ? "(เอเจนต์ไม่ได้เขียนสรุป — ดูขั้นตอนด้านบน)" : "เอเจนต์ไม่ได้ทำอะไรในรอบนี้ (ไม่ได้เรียกเครื่องมือเลย) — ลองสั่งใหม่ให้ชัดขึ้น หรือแบ่งเป็นขั้นตอนเล็กลง");
       if(typeof aiagNoWorkGuard==="function") run.final=aiagNoWorkGuard(run, run.final, didWork, wantsChange);
       if(didWork && typeof aiagClaimGuard==="function") run.final=aiagClaimGuard(run, run.final);
+      if(didWork && typeof aiagFactGuard==="function") run.final=aiagFactGuard(run, run.final);
       break;
     }
     if(run.cancel && !run.final){ run.error="หยุดแล้ว ("+(run.cancelWhy||"สั่งหยุด")+")"; run.stopped=true; }
@@ -17763,11 +17788,33 @@ async function aiAgentRun(msg, opts){
   if(sb) sb.remove();
   aiagRemember(run);
   live(run.error?"หยุด":`เสร็จ · ${run.steps.filter(s=>s.kind==="tool").length} ขั้น · ${run.seconds} วิ`);
-  if(run.final) aiAppend("ai", run.final);
+  run.uid=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  const box=run.final ? aiAppend("ai", run.final) : null;
   if(run.error) aiAppend("ai", "เอเจนต์: "+run.error, {err:true});
-  try{ await aiagPost("/api/agent/log", {message:run.message, state:run.state, final:run.final, error:run.error, steps:run.steps,
-    model_calls:run.model_calls, tokens:run.tokens, seconds:run.seconds}); }catch(_){}
+  if(typeof aiagRateButtons==="function") aiagRateButtons(box || $("#acLog > .ac-msg:last-child"), run);
+  // the whole run, as the model saw it (system prompt, tool schemas by name, every message): with a 👍/👎
+  // from the user (ratings.jsonl, same folder) it is material for the next training round
+  let model=null; try{ model=((await (await fetch("/api/llm/status")).json())||{}).model||null; }catch(_){}
+  try{ await aiagPost("/api/agent/log", {uid:run.uid, message:run.message, state:run.state, final:run.final, error:run.error, steps:run.steps,
+    model_calls:run.model_calls, tokens:run.tokens, seconds:run.seconds, model, profile:run.profile, calls:run.calls,
+    escalated:run.escalated||undefined, tools:(AIAG.tools||[]).map(t=>t.function.name), messages:run._messages||undefined}); }catch(_){}
   return run;
+}
+
+/* 👍 / 👎 under an agent answer → /api/agent/rate (agent-runs/ratings.jsonl, keyed by the run's uid) */
+function aiagRateButtons(el, run){
+  if(!el || !run || !/^https?:/.test(location.protocol)) return;
+  const bar=document.createElement("div"); bar.className="ag-rate";
+  bar.innerHTML='<button data-r="1" title="คำตอบนี้ถูก / ใช้ได้">👍</button><button data-r="-1" title="คำตอบนี้ผิด / ทำไม่ได้">👎</button><span class="ag-rate-msg"></span>';
+  bar.addEventListener("click", async e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    const r=+b.dataset.r; let note="";
+    if(r<0){ note=prompt("ผิดตรงไหน? (ไม่ใส่ก็ได้ — ช่วยให้เทรนรอบหน้าได้ตรงจุด)", "")||""; }
+    bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on", x===b));
+    const msg=bar.querySelector(".ag-rate-msg");
+    try{ const j=await aiagPost("/api/agent/rate", {uid:run.uid, rating:r, note, message:run.message, final:run.final});
+      msg.textContent=j&&j.ok ? "บันทึกแล้ว" : "บันทึกไม่ได้"; }catch(_){ msg.textContent="บันทึกไม่ได้"; } });
+  el.after(bar);
 }
 
 /* ---- the chat's third mode: เอเจนต์ (local model + tools) ---- */
@@ -17807,7 +17854,7 @@ MCP_OPS.ai_chat = a=>{
     if(!prev || !prev.resumable) mcpFail("no run to resume"+(prev?` — run ${prev.id} ended with an answer or cannot be continued`:""), "resume works on a run stopped by ai_chat_stop, the step limit or the time budget, in this page (not after a reload)");
     a=Object.assign({}, a, {message:"(ทำต่อ) "+prev.message, mode:"agent"}); }
   const msg=String(a.message||"").trim(); if(!msg) mcpFail("message is required — what the user would type in the chat");
-  AIAG.nextOpts={maxSteps:a.max_steps, budgetS:a.budget_s, resume:prev, noEscalate:a.escalate===false, think:a.think, temperature:a.temperature};
+  AIAG.nextOpts={maxSteps:a.max_steps, budgetS:a.budget_s, resume:prev, noEscalate:a.escalate===false, wantEscalate:a.escalate===true, think:a.think, temperature:a.temperature};
   if(!AICHAT.open) toggleAiChat();
   if(a.mode){ if(!["build","qa","agent"].includes(a.mode)) mcpFail("mode is build | qa | agent"); aiSetMode(a.mode); }
   const t=$("#acInput"); t.value=msg;
@@ -21474,7 +21521,9 @@ function sdSummary(vals, names){
       if(ok && v.slice(from).some(x=>x!==v[from])) period=p; }
     const seen=[]; v.forEach(x=>{ if(!seen.includes(x) && seen.length<32) seen.push(x); });
     const o={changes, period, last:v[v.length-1]};
-    if(seen.every(x=>x===0||x===1)) o.high=+(v.filter(x=>x===1).length/v.length).toFixed(3);
+    if(seen.every(x=>x===0||x===1)){ o.high=+(v.filter(x=>x===1).length/v.length).toFixed(3);
+      // over one whole period (start-up skipped): a divider's duty, 0.5 for ÷ even N
+      if(period){ const w=v.slice(from, from+period); o.duty=+(w.filter(x=>x===1).length/period).toFixed(3); o.high_clocks=w.filter(x=>x===1).length; } }
     if(period==null && !changes) o.constant=v[0];
     o.values=seen; o.first=v.slice(0,24);
     S[n]=o; });
@@ -21678,9 +21727,10 @@ MCP_OPS.update_module = a=>{
    installed and never used. When a run stops making progress (18: stall / time budget) and a bigger
    agent model is installed, the app restarts llama-server with it, the SAME conversation continues
    (tools, sheets and the plan so far), and the small model comes back when the run is over — the
-   next routine request is fast again. Off: localStorage schstudio.agentEscalate = "0", or
-   ai_chat {escalate:false}. */
-const AIAG_ESC = { on:(()=>{ try{ return localStorage.getItem("schstudio.agentEscalate")!=="0"; }catch(_){ return true; } })() };
+   next routine request is fast again. OFF by default since loading a 9B (5.7 GB) on a machine with the 4B,
+   the editor and a browser open left ~1 GB free and the page was reloaded mid-run. On: localStorage
+   schstudio.agentEscalate = "1", or ai_chat {escalate:true} for one run. */
+const AIAG_ESC = { on:(()=>{ try{ return localStorage.getItem("schstudio.agentEscalate")==="1"; }catch(_){ return false; } })() };
 async function aiagModelStatus(){ try{ return await (await fetch("/api/llm/status")).json(); }catch(_){ return null; } }
 /* the installed agent model bigger than the one running, or null */
 function aiagBigger(st){
@@ -21692,7 +21742,7 @@ function aiagBigger(st){
 }
 /* switch to the bigger model and wait until it answers; {from,to} or null */
 async function aiagEscalate(run, live){
-  if(!AIAG_ESC.on || run.noEscalate || run.escalated || !/^https?:/.test(location.protocol)) return null;
+  if(!(AIAG_ESC.on || run.wantEscalate) || run.noEscalate || run.escalated || !/^https?:/.test(location.protocol)) return null;
   const st=await aiagModelStatus(), b=aiagBigger(st); if(!b) return null;
   live && live(`โมเดล ${b.from.name} ติดอยู่ — สลับไป ${b.to.name}…`);
   aiagLine(`<div class="ag-step"><span class="ag-tool">⇪ สลับโมเดล</span><div class="ag-res">${esc(b.from.name)} ไม่คืบหน้า — ให้ ${esc(b.to.name)} ทำต่อจากเดิม (เปลี่ยนกลับเมื่อจบงาน)</div></div>`, "step");
@@ -22097,15 +22147,33 @@ function acNumber(v, w){
 function acSplitGroups(sch, inputs){
   if(!inputs || typeof inputs!=="object") return inputs;
   const ins=sch.components.filter(c=>c.type==="IN"), has=n=>ins.some(c=>String(c.params.name).toLowerCase()===String(n).toLowerCase());
-  const out={};
+  const out={}, bus={};
+  const groupBits=n=>{ const bits=[]; ins.forEach(c=>{ const m=/^(.*?)_?(\d+)$/.exec(String(c.params.name)); if(m && m[1].toLowerCase()===String(n).toLowerCase() && (c.params.width||1)===1) bits[+m[2]]=c.params.name; }); return bits; };
   Object.entries(inputs).forEach(([n,v])=>{
+    // a bit range: sw[7:4] / sw[3] — of a bus INPUT, or of a numbered group sw0..sw15
+    const r=/^\s*([A-Za-z_][\w]*)\s*\[\s*(\d+)\s*(?::\s*(\d+)\s*)?\]\s*$/.exec(n);
+    if(r && !has(n)){
+      const base=r[1], hi=Math.max(+r[2], +(r[3]??r[2])), lo=Math.min(+r[2], +(r[3]??r[2])), w=hi-lo+1;
+      const x=acNumber(v, w);
+      if(isNaN(x)) mcpFail(`'${n}' is ${w} bit(s): give one number`, `e.g. "${n}": ${Math.min(5,(1<<w)-1)} or "0b${"1".repeat(w)}"`);
+      if(x>=2**w) mcpFail(`${x} does not fit in ${n} (${w} bit${w>1?"s":""})`);
+      const c=ins.find(q=>String(q.params.name).toLowerCase()===base.toLowerCase());
+      if(c && (c.params.width||1)>1){ const W=c.params.width; if(hi>=W) mcpFail(`${base} is ${base}[${W-1}:0]: no bit ${hi}`);
+        const k=c.params.name, m=((2**w)-1)*2**lo; bus[k]=bus[k]||{v:0, m:0}; bus[k].v=(bus[k].v & ~m) | (x*2**lo); bus[k].m|=m; return; }
+      const bits=groupBits(base);
+      if(bits.length && bits.slice(lo, hi+1).length===w && bits.slice(lo, hi+1).every(Boolean)){
+        for(let i=lo;i<=hi;i++) out[bits[i]]=Math.floor(x/2**(i-lo))&1; return; }
+      mcpFail(`no INPUT bits '${n}'`, "inputs: "+ins.map(q=>q.params.name+((q.params.width||1)>1?`[${q.params.width-1}:0]`:"")).join(", "));
+    }
     if(has(n)){ out[n]=v; return; }
-    const bits=[]; ins.forEach(c=>{ const m=/^(.*?)_?(\d+)$/.exec(String(c.params.name)); if(m && m[1].toLowerCase()===String(n).toLowerCase() && (c.params.width||1)===1) bits[+m[2]]=c.params.name; });
+    const bits=groupBits(n);
     if(bits.length<2 || bits.some(b=>!b)){ out[n]=v; return; }                 // not a group: the core says "no INPUT"
     const x=acNumber(v, bits.length);
     if(isNaN(x)) mcpFail(`'${n}' is the group ${bits[0]}..${bits[bits.length-1]}: give one number`, `e.g. ${n}: 4704, "0x1260" or "0b${"0".repeat(bits.length)}"`);
     bits.forEach((b,i)=>{ out[b]=(x>>i)&1; });
   });
+  // slices of one bus INPUT add up; a whole value given beside them is the base
+  Object.entries(bus).forEach(([k,o])=>{ const whole=out[k]!=null ? acNumber(out[k], 64) : 0; out[k]=((isNaN(whole)?0:whole) & ~o.m) | o.v; });
   return out;
 }
 {
@@ -22215,7 +22283,31 @@ async function aiagStructuredCall(run, messages, plan){
     {role:"user", content:`(system) Now the arguments of ${tool}, filled from your plan and the user's request (sheet names, blocks, every connection). ${def.description}`}]),
     def.parameters, tool, 2000);
   if(!args || typeof args!=="object") return null;
+  const why=aiagStructuredUnsafe(run, tool, args);
+  if(why){ run.steps.push({kind:"nudge", text:"constrained call dropped: "+why}); return null; }
   return {id:"sc"+(run.structTries||0), type:"function", function:{name:tool, arguments:JSON.stringify(args)}};
+}
+
+/* after work was done: a reply that still announces a next step (not a closing summary) */
+function aiagPlanAhead(plan){
+  const t=String(plan||"");
+  if(/(เสร็จ|เรียบร้อย|สรุป|ผ่าน|ตรวจแล้ว|ครบแล้ว|ทำงานได้|ถูกต้อง|\b(done|passed|summary|completed?|verified|finished|works)\b)/i.test(t)) return false;
+  return /(ต่อไป|ขั้นต่อไป|ขั้นถัดไป|ถัดไป|จะ(ต่อ|สร้าง|วาง|แก้|เพิ่ม|ลบ|เรียก)|ต้อง(ต่อ|สร้าง|วาง|แก้|เพิ่ม)|ยังไม่ได้|\bnext\b|\bnow (I|we|let)|\bI will\b|\bI'll\b|\blet me\b|\bthen I\b)/i.test(t);
+}
+/* a call the app wrote for the model must never destroy work: no rebuild over a sheet with parts that this run did
+   not make (build_hierarchy with no sheet goes to "top" — the user's top sheet was rebuilt that way), no deletes */
+function aiagStructuredUnsafe(run, tool, args){
+  if(/^(delete_|remove_|rename_|clear_)/.test(tool)) return tool+" is never written for the model";
+  if(!/^build_|^vhdl_block$/.test(tool)) return null;
+  const nm=String(args.sheet||args.name||"").trim();
+  if(!nm && tool==="build_hierarchy") return "build_hierarchy with no sheet name";
+  const P=(state&&state.project&&state.project.schematics)||{};
+  const s=nm && Object.values(P).find(x=>String(x.name).toLowerCase()===nm.toLowerCase());
+  const made=run.made||new Set();
+  if(s && s.components.some(c=>c.type!=="JUNCTION") && !made.has(s.id)){
+    if(args.replace) delete args.replace;          // the tool then refuses with "already has parts" — nothing lost
+  }
+  return null;
 }
 
 /* ===== 50. Synchronous counters / dividers drawn like the lab sheet =============================
@@ -22402,6 +22494,26 @@ async function aiagUnansweredFinish(run, content, needCheck, needSim){
     (lines.length ? "แอปตรวจให้เอง:\n"+lines.join("\n")+"\n" : "")+
     "ยังไม่มีการจำลองว่าวงจรทำงานตรงตามที่ขอ — เปิดหน้าจำลองดูเอง หรือสั่งใหม่ว่า \"จำลองแผ่น "+(sheets[0]||"…")+"\""+
     (said ? "\n\nข้อความจากโมเดล (ยังไม่ได้ตรวจ):\n"+said : "");
+}
+
+/* the final answer against what the tools actually returned: "ผ่าน 1,000 จาก 1,000" / "16/16 rows" and
+   "แผ่น X" must be found in the run's tool results / the project, else the answer gets a ⚠ naming them */
+function aiagFactGuard(run, final){
+  const t=String(final||""); if(/^⚠/.test(t)) return t;
+  const seen=(run.steps||[]).filter(x=>x.kind==="tool").map(x=>String(x.result||"")+" "+String(x.summary||"")+" "+JSON.stringify(x.args||{})).join("\n");
+  const nums=s=>String(s).replace(/,/g,"");
+  const bad=[];
+  for(const m of t.matchAll(/(\d[\d,]*)\s*(?:\/|จาก|ใน|of|out of)\s*(\d[\d,]*)/gi)){
+    const a=nums(m[1]), b=nums(m[2]); if(a.length>6 || b.length>6 || +b<2) continue;
+    const hasB=new RegExp("(^|\\D)"+b+"(\\D|$)").test(seen), hasA=new RegExp("(^|\\D)"+a+"(\\D|$)").test(seen);
+    if(!hasB || (!hasA && a!==b)) bad.push(m[0].trim()); }
+  const P=Object.values(((state||{}).project||{}).schematics||{}).map(s=>String(s.name).toLowerCase());
+  for(const m of t.matchAll(/(?:แผ่น|ชีต|ชีท|sheet)\s*[`"'“]?([A-Za-z_][A-Za-z0-9_]*)/gi)){
+    const n=m[1]; if(/^(top|ใหม่|new|this|นี้)$/i.test(n)) continue;
+    if(!P.includes(n.toLowerCase()) && !new RegExp("\\b"+n+"\\b", "i").test(seen)) bad.push("แผ่น "+n); }
+  const uniq=[...new Set(bad)].slice(0,4); if(!uniq.length) return t;
+  run.steps.push({kind:"nudge", text:"the answer names things no tool returned — flagged: "+uniq.join(", ")});
+  return "⚠ ในคำตอบมี "+uniq.map(x=>`“${x}”`).join(", ")+" ที่ไม่ตรงกับผลจากเครื่องมือในรอบนี้ (หรือแผ่นที่ไม่มีในโปรเจกต์) — ตรวจเองก่อนเชื่อ\n\n"+t;
 }
 
 /* ===== 52. Which sheets use the one on screen ==================================================

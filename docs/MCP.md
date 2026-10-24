@@ -137,6 +137,7 @@ Claude ──stdio──▶ mcp_server.py ──HTTP + token──▶ launcher (
 - **`simulate`** also gives every port as one number (`table` / `values`; a bus or a group q0..q3) and a text `waveform`
   for flip-flop sheets.
 - **`probe {inside:"u"}`** gives the nets inside block `u` (or a path `u/v`), with its inputs from the whole circuit.
+- **`probe` bit ranges**: `inputs:{"sw[7:4]":5, "sw[1]":1}` sets a slice of a bus INPUT or of a numbered group `sw0..sw15`; other bits stay 0 (or come from a whole value given beside it).
 - **`check`** also reports a net with two drivers and logic whose output goes nowhere.
 - **`get_events {since, wait}`** waits for the next edit, so an outside tool can follow the user.
 
