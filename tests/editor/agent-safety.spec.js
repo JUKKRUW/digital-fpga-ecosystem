@@ -82,3 +82,50 @@ test("SFT2 report: probe facts in the answer, unchanged re-check, long simulate,
   expect(r.fpNote).toMatch(/existing sheet 'errs'/);
   expect(r.locked).toMatch(/locked for the agent/);
 });
+
+test("v2.7.1 report: questions are read-only, request bits vs probe, no oracle over several sheets, fast path keeps the rest, divider spec, periods", async ({ page }) => {
+  await openEditor(page);
+  const r = await page.evaluate(async () => {
+    await MCP_OPS.build_circuit({ sheet: "errchk", formula: "err = sw1 & sw2 & sw3" });
+    AIAG.cur = { message: "แผ่น div50 ตอนนี้หารกี่เท่า เช็คให้หน่อย", steps: [] };
+    const q = await aiagCall("build_part", { kind: "clock_divider", sheet: "errchk", params: { n: 50 }, replace: true });
+    AIAG.cur = { message: "ทำ y = a & b ลงแผ่น main", steps: [] };
+    const top = await aiagCall("set_top_sheet", { sheet: "errchk" }).catch(e => ({ ok: false, error: String(e) }));
+    // the 2.7.1 test C run: probe given sw=0, answer "ไม่ติด"
+    const pr = MCP_OPS.probe({ sheet: "errchk", inputs: { sw: 0 } });
+    const run = { message: "ถ้าตั้ง sw0 ถึง sw3 เป็น 1 หมด ที่เหลือเป็น 0 ไฟ err จะติดไหม", steps: [{ kind: "tool", tool: "probe", ok: true, args: { sheet: "errchk" }, full: { inputs: pr.inputs, outputs: pr.outputs } }] };
+    const c = aiagFactGuard(run, "ไม่ติดครับ — probe ด้วย sw = 0 ได้ err = 0");
+    const ov = aiagOracleAfter({ message: "ทำแผ่น div5 (หาร 5) กับแผ่น div10 แล้วให้แผ่น div50 เอา div5 มาต่อ", steps: [], oracle: oracleDerive("หารความถี่ 5") },
+      "build_part", { ok: true, result: { sheet: "errchk" } });
+    const errSpec = (Object.values(state.project.schematics).find(s => s.name === "errchk") || {}).specSource || null;
+    const fpRun = { steps: [] };
+    const keepCall = aiagCall; aiagCall = async (t, a) => ({ ok: true, result: await MCP_OPS[t](a) });   // no launcher here
+    const fp = await aiagFastPath("ทำ mux 2:1 ชื่อแผ่น m2 แล้วลองเทสว่าถ้า s=1 d0=0 d1=1 ขาออกเป็นเท่าไร", fpRun);
+    aiagCall = keepCall;
+    await MCP_OPS.build_part({ kind: "clock_divider", sheet: "d25", params: { n: 25 } });
+    const sp = MCP_OPS.set_spec({ sheet: "d25", formula: "clk_out = clk_in / 25" });
+    const sim = MCP_OPS.simulate({ sheet: "d25" });
+    const per = aiagFactGuard({ message: "div25", steps: [{ kind: "tool", tool: "simulate", ok: true, result: JSON.stringify(sim).slice(0, 2500) }] },
+      "จำลองแล้ว clk_out กลับมาขึ้นทุก 50 clock (หาร 50)");
+    const qGuard = aiagNoWorkGuard({ steps: [] }, "เพราะ 7-seg เป็น common anode", false, false);
+    return { q: q.error, top: top.error, c, ov, errSpec, fp: fp && (fp.final ? "final" : fp.note), spec: sp.result && sp.result.pass, per, qGuard };
+  });
+  expect(r.q).toMatch(/only ASKED a question/);
+  expect(r.top).toMatch(/does not ask to change the top/);
+  expect(r.c).toMatch(/^⚠ probe ไม่ได้ป้อนค่าตามคำขอ.*sw1 ควรเป็น 1.*err=1/s);
+  expect(r.ov).toBeNull();
+  expect(r.errSpec).toBeNull();
+  expect(r.fp).toMatch(/do the REST of the request/);
+  expect(r.spec).toBe(true);
+  expect(r.per).toMatch(/^⚠ คำตอบบอก .*ทุก 50 clock.*คาบ 25/s);
+  expect(r.qGuard).toBe("เพราะ 7-seg เป็น common anode");
+});
+
+test("probe: a bit range over a missing switch names the missing bit", async ({ page }) => {
+  await openEditor(page);
+  const msg = await page.evaluate(async () => {
+    await MCP_OPS.build_circuit({ sheet: "sp", formula: "err = sw1 & sw2 & sw3 & ~sw5" });
+    try { MCP_OPS.probe({ sheet: "sp", inputs: { "sw[5:2]": "1111" } }); return "no error"; } catch (e) { return e.message; }
+  });
+  expect(msg).toMatch(/no INPUT sw4/);
+});
