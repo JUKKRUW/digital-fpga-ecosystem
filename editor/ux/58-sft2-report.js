@@ -48,7 +48,7 @@ const SR_READ_ONLY=new Set(["check","simulate","probe","verify_truth_table","exp
     return srRecheck(tool, a, ()=>_call.apply(this, arguments));
   };
 }
-MCP_OPS.lock_sheet=a=>{
+MCP_OPS.lock_sheet = a=>{
   const sch=mcpSheet(a.sheet), P=state.project, L=P.agentLocked=(P.agentLocked||[]).filter(n=>n.toLowerCase()!==sch.name.toLowerCase());
   if(a.lock!==false) L.push(sch.name);
   try{ snapshot(); }catch(_){}
