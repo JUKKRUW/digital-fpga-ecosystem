@@ -120,3 +120,12 @@ test("v2.7.1 report: questions are read-only, request bits vs probe, no oracle o
   expect(r.per).toMatch(/^⚠ คำตอบบอก .*ทุก 50 clock.*คาบ 25/s);
   expect(r.qGuard).toBe("เพราะ 7-seg เป็น common anode");
 });
+
+test("probe: a bit range over a missing switch names the missing bit", async ({ page }) => {
+  await openEditor(page);
+  const msg = await page.evaluate(async () => {
+    await MCP_OPS.build_circuit({ sheet: "sp", formula: "err = sw1 & sw2 & sw3 & ~sw5" });
+    try { MCP_OPS.probe({ sheet: "sp", inputs: { "sw[5:2]": "1111" } }); return "no error"; } catch (e) { return e.message; }
+  });
+  expect(msg).toMatch(/no INPUT sw4/);
+});

@@ -52,8 +52,11 @@ function acSplitGroups(sch, inputs){
       if(c && (c.params.width||1)>1){ const W=c.params.width; if(hi>=W) mcpFail(`${base} is ${base}[${W-1}:0]: no bit ${hi}`);
         const k=c.params.name, m=((2**w)-1)*2**lo; bus[k]=bus[k]||{v:0, m:0}; bus[k].v=(bus[k].v & ~m) | (x*2**lo); bus[k].m|=m; return; }
       const bits=groupBits(base);
-      if(bits.length && bits.slice(lo, hi+1).length===w && bits.slice(lo, hi+1).every(Boolean)){
-        for(let i=lo;i<=hi;i++) out[bits[i]]=Math.floor(x/2**(i-lo))&1; return; }
+      // a sparse group (sw1, sw2, sw3, sw5): every bit of the range must exist (slice/every skip holes)
+      const missing=[]; for(let i=lo;i<=hi;i++) if(!bits[i]) missing.push(base+i);
+      if(bits.filter(Boolean).length && missing.length) mcpFail(`no INPUT ${missing.join(", ")} — '${n}' needs every bit from ${base}${lo} to ${base}${hi}`,
+        "inputs: "+ins.map(q=>q.params.name).join(", ")+" — give the bits one by one ({"+bits.filter(Boolean).slice(0,2).map(b=>`"${b}":1`).join(", ")+"})");
+      if(bits.filter(Boolean).length){ for(let i=lo;i<=hi;i++) out[bits[i]]=Math.floor(x/2**(i-lo))&1; return; }
       mcpFail(`no INPUT bits '${n}'`, "inputs: "+ins.map(q=>q.params.name+((q.params.width||1)>1?`[${q.params.width-1}:0]`:"")).join(", "));
     }
     if(has(n)){ out[n]=v; return; }
