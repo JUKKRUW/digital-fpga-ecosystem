@@ -35,7 +35,7 @@
 | 1.4 | `tool_cover` | 200 | tool ที่ SFT2 ไม่ได้สอน: `update_component`, `add_component`, `connect`, `disconnect`, `apply`, `simulate {vectors}`, `verify_truth_table`, `explain_simulation`, `get_pins`, `board_check`, `use_module`, `save_module`, `search_course` — อย่างละ ~15 แถว งานจริงที่ tool นั้นเป็นคำตอบที่ถูก |
 | 1.5 | `dup_blocks` | 80 | บล็อกชนิดเดียวกันหลายตัวในงานประกอบ (div5 ×2, adder4 ×2 → 8 บิต, mux2 ×3 → mux4, counter_digit ×2): ตั้งชื่อ `d5a`/`d5b` แล้ว connect อ้างชื่อที่ตั้งเอง · มีแถวกู้ตัวจาก error "no block 'd0'" |
 | 1.6 | `locked` | 30 | build ลงแผ่นที่ล็อก → error "locked for the agent" → สร้างลงแผ่นใหม่ (`<name>_new`) แล้วบอกผู้ใช้ว่าแผ่นเดิมถูกล็อก ไม่แตะ |
-| 1.7 | `sim_cycles` | 40 | ตัวหาร/ตัวนับ N → `simulate {cycles: ≥ 2N+4}` แล้วอ่านคาบจาก `summary` (`period`, `duty`) ในคำตอบ |
+| 1.7 | `sim_cycles` | 40 | ตัวหาร/ตัวนับ N → `simulate {cycles: ≥ 3N+8}` แล้วอ่านคาบจาก `summary` (`period`, `duty`) ในคำตอบ |
 | 1.9 | `qa_plain` | 80 | คำถามความรู้ที่ไม่ต้องใช้ tool ("ทำไม 7-seg ต้องส่ง 0") → ตอบภาษาไทยถูกไวยากรณ์ ไม่เรียก tool · คำถามเกี่ยวกับแผ่น ("หารกี่เท่า", "มีอะไรบ้าง") → อ่าน/จำลองเท่านั้น ไม่แก้ |
 | 1.8 | `user_log` | ตามที่มี | `from_logs.py` (โฟลเดอร์นี้): run ที่ผู้ใช้กด 👍 และแอปไม่ติด ⚠ → แถวเทรน · 👎 → `logs_bad.jsonl` ไว้ดูด้วยมือ (ห้ามเทรนตรง ๆ) |
 | — | replay | 30–40 % ของ mix | SFT2 (`sft2_v2`) + SFT1 replay สุ่มตามสัดส่วน category |
