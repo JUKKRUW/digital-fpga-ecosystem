@@ -1,0 +1,30 @@
+{
+ "rows": 1227,
+ "new_families": {
+  "probe_bits": 185,
+  "edit_report": 99,
+  "tool_cover": 37,
+  "dup_blocks": 36,
+  "stop_check": 60,
+  "qa_plain": 82,
+  "sim_cycles": 40,
+  "locked": 13
+ },
+ "sft2_families_regenerated": {
+  "split": 140,
+  "edit": 8,
+  "pins": 74,
+  "vhdl": 135,
+  "compose_rec": 12,
+  "build": 48,
+  "probe": 144,
+  "vhdl_sem": 30,
+  "vhdl_fix": 36,
+  "multi": 12,
+  "spec": 10,
+  "compose": 18,
+  "qa": 8
+ },
+ "masked_assistant_turns": 201,
+ "tools": 41
+}

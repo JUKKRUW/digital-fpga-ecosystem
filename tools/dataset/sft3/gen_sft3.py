@@ -61,6 +61,12 @@ def fake_turn(T, name, args, content, weight=1):
     T.msgs.append({"role": "tool", "tool_call_id": tc["id"], "content": content})
 
 
+def cycles_for(n):
+    """enough clocks for simulate's summary to name the period: it skips the first quarter as start-up and
+    needs two whole periods after that — about 3N (2N, what SFT2 taught, often showed period null)"""
+    return min(3 * n + 8, 256)
+
+
 def one(v):
     return v.get("value") if isinstance(v, dict) else v
 
@@ -73,9 +79,11 @@ def on_off(v):
 SW_SHEETS = [
     ("errchk", "err = sw1 & sw2 & sw3 & ~sw5", "err", "ไฟ err"),
     ("err8", "err = sw3&(sw2|sw1) | sw7&(sw6|sw5)", "err", "ไฟ error"),
-    ("odd8", "odd = sw0 ^ sw1 ^ sw2 ^ sw3 ^ sw4 ^ sw5 ^ sw6 ^ sw7", "odd", "ไฟ odd"),
+    ("odd4", "odd = sw0 ^ sw1 ^ sw2 ^ sw3", "odd", "ไฟ odd"),
+    ("win6", "win = sw2 & sw3 & sw4 | sw6 & ~sw2", "win", "ไฟ win"),
+    ("pass5", "ok = sw0 & sw1 & ~sw2 | sw4 & sw5", "ok", "ไฟ ok"),
     ("big8", "big = sw7 | sw6&sw5", "big", "ไฟ big"),
-    ("lock4", "open = sw0 & ~sw1 & sw2 & sw3", "open", "ไฟ open"),
+    ("lock4", "unlock = sw0 & ~sw1 & sw2 & sw3", "unlock", "ไฟ unlock"),
     ("any8", "alarm = sw0|sw1|sw2|sw3|sw4|sw5|sw6|sw7", "alarm", "สัญญาณ alarm"),
 ]
 
@@ -116,15 +124,28 @@ def fam_probe_bits(sheet, formula, out, label, kind, sel):
                  f"ถ้า {', '.join(f'sw{k}=1' for k in sel)} {out} เป็นอะไร",
                  f"ลองดูหน่อยถ้า {' '.join(f'sw{k}' for k in sel)} เป็น 1 {label}จะติดหรือไม่"]
         args = {f"sw{k}": 1 for k in sel}
+    elif kind == "gap":
+        lo, hi = sel
+        users = [f"เปิด sw{lo} ถึง sw{hi} หมดเลย {label}ติดไหม", f"ถ้า sw{lo}-sw{hi} เป็น 1 ทั้งหมด {out} ออกเท่าไร"]
+        args = {f"sw[{hi}:{lo}]": "1" * (hi - lo + 1)}
     else:                                   # the user gave the number
         v = sel
         users = [f"ถ้าตั้ง sw เป็น 0x{v:02X} {label}จะติดไหม", f"สวิตช์ทั้ง 8 ตัวเป็นค่า {v} (ฐานสิบ) {out} ออกเท่าไร"]
         args = {"sw": f"0x{v:02X}"}
     T.start(users[0])
+    note = ""
+    if kind == "gap":                       # the range hits a missing switch: the app names it → the bits that exist
+        (ok, res, cont), = T.turn([("probe", {"sheet": sheet, "inputs": args})], weight=0)
+        if ok:
+            raise RuntimeError("gap probe passed")
+        have = [k for k in sw_inputs(formula) if lo <= k <= hi]
+        missing = [k for k in range(lo, hi + 1) if k not in have]
+        args = {f"sw{k}": 1 for k in have}
+        note = f"\n(แผ่นนี้ไม่มี {', '.join(f'sw{k}' for k in missing)} เลยป้อนเฉพาะสวิตช์ที่มี)"
     (ok, res, cont), = T.turn([("probe", {"sheet": sheet, "inputs": args})])
     if not ok:
         raise RuntimeError(cont)
-    T.final(probe_answer(res, out, label, rng.randrange(4)))
+    T.final(probe_answer(res, out, label, rng.randrange(4)) + note)
     return T.rows(users)
 
 
@@ -132,9 +153,16 @@ def gen_probe_bits():
     for (sheet, f, out, label) in SW_SHEETS:
         bits = sw_inputs(f)
         cases = set()
-        for _ in range(4):
-            lo = rng.choice(bits); hi = rng.choice([b for b in bits if b >= lo])
+        runs, cur = [], [bits[0]]
+        for b in bits[1:]:
+            if b == cur[-1] + 1: cur.append(b)
+            else: runs.append(cur); cur = [b]
+        runs.append(cur)
+        for _ in range(5):
+            r = rng.choice(runs); lo = rng.choice(r); hi = rng.choice([b for b in r if b >= lo])
             cases.add(("range", (lo, hi)))
+        if len(runs) > 1:                    # a range over a switch the sheet does not have
+            cases.add(("gap", (runs[0][0], runs[1][-1])))
         for _ in range(3):
             cases.add(("list", tuple(sorted(rng.sample(bits, rng.randint(1, min(3, len(bits))))))))
         if max(bits) == 7:
@@ -168,7 +196,12 @@ def build_summary(kind, sheet, b, c, s):
     if isinstance(s, dict) and s.get("summary"):
         per = {k: v.get("period") for k, v in s["summary"].items() if v.get("period")}
     rows = len((s or {}).get("rows") or []) if isinstance(s, dict) else 0
-    sim = (f"จำลอง {s.get('clocks')} clock: " + ", ".join(f"{k} คาบ {p}" for k, p in per.items())) if per else f"จำลอง {rows} แถว"
+    if per:
+        sim = f"จำลอง {s.get('clocks')} clock: " + ", ".join(f"{k} คาบ {p}" for k, p in per.items())
+    elif isinstance(s, dict) and s.get("kind") == "sequential":
+        sim = f"จำลอง {s.get('clocks')} clock (ยังไม่ครบสองคาบ จึงยังบอกคาบไม่ได้)"
+    else:
+        sim = f"จำลองครบ {rows} แถว"
     v = (b or {}).get("verified") or {}
     forms = [
         f"สร้าง {kind} ลงแผ่น {sheet} แล้วครับ\n- ขาเข้า {ins} · ขาออก {outs}\n- {check_line(c)}\n- {sim}",
@@ -189,7 +222,7 @@ def fam_stop_check(kind, params, sheet, user, repeat):
         raise RuntimeError(cont)
     sim = {"sheet": sheet}
     if "n" in params and kind in G.SEQ:
-        sim["cycles"] = 2 * params["n"] + 4
+        sim["cycles"] = cycles_for(params["n"])
     (ok1, c, ccont), (ok2, s, _) = T.turn([("check", {"sheet": sheet}), ("simulate", sim)])
     if repeat:                               # SFT2's habit: check again with nothing changed → the app's answer
         o = dict(c) if isinstance(c, dict) else {}
@@ -210,6 +243,10 @@ def gen_stop_check():
 
 # ------------------------------------------------------------------ edit_report
 EDIT_BASE = [("errchk", "err = sw1 & sw2 & sw3", ["sw1", "sw2", "sw3"], ["err"]),
+             ("door", "unlock = key & ~lock; beep = key & lock", ["key", "lock"], ["unlock", "beep"]),
+             ("vote", "pass = a&b | a&c | b&c", ["a", "b", "c"], ["pass"]),
+             ("cmpx", "eq = ~(a ^ b); gt = a & ~b", ["a", "b"], ["eq", "gt"]),
+             ("pump", "motor = low & ~full | manual; alarm = full & low", ["low", "full", "manual"], ["motor", "alarm"]),
              ("alarm", "alarm = door & armed | smoke", ["door", "armed", "smoke"], ["alarm"]),
              ("sel", "y = s & b | ~s & a; yn = ~(s & b | ~s & a)", ["a", "b", "s"], ["y", "yn"])]
 
@@ -281,6 +318,31 @@ def fam_delete_out(sheet, formula, ins, outs):
     return T.rows(users)
 
 
+def fam_add_not(sheet, formula, ins, outs):
+    fresh_project("addn")
+    call("build_circuit", {"sheet": sheet, "formula": formula}); call("open_sheet", {"sheet": sheet})
+    x = outs[0]; nx = x + "_n"
+    ok, g, _ = call("get_sheet", {"sheet": sheet, "detail": "brief"})
+    drv = next((n["driver"] for n in (g or {}).get("nets") or [] if f"{x}.i" in n.get("sinks", [])), None)
+    if not drv:
+        raise RuntimeError("no driver")
+    T = Traj("edit_report", {"op": "add_not"})
+    users = [f"แผ่น {sheet} เพิ่มขาออก {nx} ที่เป็นค่ากลับของ {x} ให้หน่อย", f"{sheet}: อยากได้ {nx} = not {x} เพิ่มอีกขา"]
+    T.start(users[0])
+    (ok1, a1, c1), (ok2, a2, c2) = T.turn([("add_component", {"sheet": sheet, "type": "NOT", "name": "inv_" + x}),
+                                           ("add_component", {"sheet": sheet, "type": "OUT", "name": nx})])
+    if not (ok1 and ok2):
+        raise RuntimeError(c1 + c2)
+    (ok3, _, c3), (ok4, _, c4) = T.turn([("connect", {"sheet": sheet, "from": drv, "to": f"inv_{x}.i0"}),
+                                         ("connect", {"sheet": sheet, "from": f"inv_{x}.o", "to": f"{nx}.i"})])
+    if not (ok3 and ok4):
+        raise RuntimeError(c3 + c4)
+    (okv, v, _), = T.turn([("verify_truth_table", {"sheet": sheet, "formula": f"{nx} = ~({formula.split(';')[0].split('=', 1)[1].strip()})"})])
+    T.final(pick(f"เพิ่มขาออก {nx} (NOT ของ {x}) ในแผ่น {sheet} แล้วครับ\n- ต่อจาก {drv} ผ่าน NOT inv_{x}\n- ตรวจทุกแถว: " + ("ผ่าน" if (v or {}).get("pass") else "ไม่ผ่าน"),
+                 f"{nx} = not {x} เพิ่มให้แล้ว — วาง NOT inv_{x} กับ OUTPUT {nx} ต่อสาย 2 เส้น · ตรวจกับสมการ" + (" ผ่านทุกแถว" if (v or {}).get("pass") else " ไม่ผ่าน")))
+    return T.rows(users)
+
+
 def gen_edit_report():
     for (sheet, f, ins, outs) in EDIT_BASE:
         for which in ("out", "in", "out"):
@@ -288,6 +350,10 @@ def gen_edit_report():
                 yield_rows(fam_rename(sheet, f, ins, outs, which))
             except Exception as e:
                 print("  rename fail", sheet, e)
+        try:
+            yield_rows(fam_add_not(sheet, f, ins, outs))
+        except Exception as e:
+            print("  add_not fail", sheet, e)
         try:
             yield_rows(fam_gate_type(sheet, f, ins, outs, None))
         except Exception as e:
@@ -318,7 +384,9 @@ def fam_verify(sheet, built, claimed, what):
     if r.get("pass"):
         T.final(pick(f"ตรงครับ — ตรวจทุกแถวกับ {claimed} ไม่มีแถวไหนผิด", f"ผ่าน: แผ่น {sheet} ให้ผลตาม {claimed} ครบทุกแถว"))
     else:
-        rows = "; ".join(json.dumps(m, ensure_ascii=False) for m in mm[:3])
+        names = r.get("inputs") or []
+        rows = "; ".join(", ".join(f"{n}={b}" for n, b in zip(names, str(m.get("inputs", "")))) + f" → {m.get('output')} ควรเป็น {m.get('expected')} แต่ได้ {m.get('got')}"
+                         for m in mm[:3])
         T.final(f"ไม่ตรงครับ — ผิด {len(mm)} แถว เช่น {rows}\nวงจรในแผ่น {sheet} ไม่ได้ทำ {claimed} (ถ้าต้องการให้แก้ บอกได้)")
     return T.rows(users)
 
@@ -401,10 +469,38 @@ def fam_module(kind, params, sheet):
         raise RuntimeError(uc)
     T.final(pick(f"เก็บ {sheet} เป็นโมดูล {name} แล้ว และวางลงแผ่น top ให้แล้วครับ (ยังไม่ได้ต่อสาย)",
                  f"บันทึกโมดูล {name} แล้ว · วางในแผ่น top แล้ว — ต่อสายเข้าออกต่อได้เลย"))
+    call("delete_module", {"module": name})          # the library is shared by every project: leave it as it was
+    return T.rows(users)
+
+
+def fam_explain_fix(sheet, formula, cut, val):
+    fresh_project("expl")
+    call("build_circuit", {"sheet": sheet, "formula": formula}); call("open_sheet", {"sheet": sheet})
+    ok, g, _ = call("get_sheet", {"sheet": sheet, "detail": "brief"})
+    sink = next((n["sinks"][0] for n in (g or {}).get("nets") or [] if n["driver"] == f"{cut}.o"), None)
+    call("disconnect", {"sheet": sheet, "pin": f"{cut}.o"})
+    T = Traj("tool_cover", {"tool": "explain_simulation"})
+    users = [f"ทำไมแผ่น {sheet} ใส่ {cut}=1 แล้วผลไม่เปลี่ยนเลย", f"{sheet} เหมือน {cut} ไม่มีผล ช่วยดูหน่อย แล้วแก้ให้ด้วย"]
+    T.start(users[0])
+    (ok, e, _), = T.turn([("explain_simulation", {"sheet": sheet})])
+    (okc, cc, ccont), = T.turn([("connect", {"sheet": sheet, "from": f"{cut}.o", "to": sink})])
+    if not okc:
+        raise RuntimeError(ccont)
+    (okp, p, _), = T.turn([("probe", {"sheet": sheet, "inputs": val})])
+    F = [f["title"] for f in (e or {}).get("findings") or [] if f.get("level") in ("err", "warn")]
+    T.final(f"สาเหตุ: {F[0] if F else 'สายจาก ' + cut + ' ขาด'}\n- ต่อ {cut}.o เข้า {sink} ใหม่แล้ว\n- ลอง probe "
+            + ", ".join(f"{k}={v}" for k, v in (p or {}).get("inputs", {}).items()) + " → "
+            + ", ".join(f"{k}={one(v)}" for k, v in (p or {}).get("outputs", {}).items()))
     return T.rows(users)
 
 
 def gen_tool_cover():
+    for args in [("al", "alarm = door & armed | smoke", "smoke", {"smoke": 1}), ("chk", "err = sw3&(sw2|sw1)", "sw1", {"sw3": 1, "sw1": 1}),
+                 ("vt", "y = a&b | c", "c", {"c": 1}), ("lk", "unlock = key & ~lock", "key", {"key": 1})]:
+        try:
+            yield_rows(fam_explain_fix(*args))
+        except Exception as e:
+            print("  explain fail", e)
     for args in COVER:
         try:
             yield_rows(fam_verify(*args))
@@ -461,7 +557,7 @@ def fam_chain(ns, rec):
     (ok, h, cont), = T.turn([("build_hierarchy", good)])
     if not ok:
         raise RuntimeError(cont)
-    cyc = min(2 * N + 4, 256)
+    cyc = cycles_for(N)
     (okc, c, _), (oks, s, _) = T.turn([("check", {"sheet": sheet}), ("simulate", {"sheet": sheet, "cycles": cyc})])
     per = ((s or {}).get("summary") or {}).get("clk_out", {}).get("period") if isinstance(s, dict) else None
     lines = [f"ทำ {sheet} แล้วครับ: clk_in → " + " → ".join(names) + " → clk_out"]
@@ -530,7 +626,12 @@ def fam_locked(formula, users):
 
 
 def gen_locked():
-    for f, us in [("y = a & b | c", ["ทำวงจร y = a & b | c ลงแผ่น top ทับของเดิมได้เลย", "เขียน y = a&b|c ใส่ top ให้หน่อย"]),
+    for f, us in [("y = a & ~b", ["เขียน y = a and not b ลงแผ่น top", "top ให้เป็น y = a & ~b"]),
+                  ("err = sw0 & sw1", ["แผ่น top เอา err = sw0 & sw1 ทับไปเลย", "ทำ err = sw0 and sw1 ใน top"]),
+                  ("f = a ^ b ^ c", ["top: f = a xor b xor c", "แทน top ด้วย f = a ^ b ^ c"]),
+                  ("y = ~a", ["ทำ NOT ตัวเดียวลงแผ่น top: y = ~a"]),
+                  ("out1 = a | b | c", ["ใส่ OR 3 ขาใน top ทับของเดิม"]),
+                  ("y = a & b | c", ["ทำวงจร y = a & b | c ลงแผ่น top ทับของเดิมได้เลย", "เขียน y = a&b|c ใส่ top ให้หน่อย"]),
                   ("z = a ^ b", ["ใส่ z = a xor b ในแผ่น top แทนของเดิม"]),
                   ("led = sw0 & ~sw1", ["แก้ top ให้เป็น led = sw0 & ~sw1"]),
                   ("y = ~(a | b)", ["ทำ NOR สองขาใน top: y = ~(a | b)"])]:
@@ -551,29 +652,33 @@ def fam_sim_cycles(kind, n, sheet):
     users = [f"จำลองแผ่น {sheet} ให้ดูหน่อยว่าหารกี่เท่าจริง", f"{sheet} คาบออกมาเท่าไร ลองจำลองดู"] if kind == "clock_divider" else \
             [f"จำลอง {sheet} ให้ดูว่านับวนกี่ค่า", f"{sheet} นับถึงเท่าไรแล้ววนกลับ ลองจำลอง"]
     T.start(users[0])
-    cyc = min(2 * n + 4, 256)
+    cyc = cycles_for(n)
     (ok, s, cont), = T.turn([("simulate", {"sheet": sheet, "cycles": cyc})])
     if not ok:
         raise RuntimeError(cont)
     S = (s or {}).get("summary") or {}
     if kind == "clock_divider":
         o = S.get("clk_out") or {}
+        if not o.get("period"):
+            raise RuntimeError("no period in %d clocks" % cyc)
         T.final(f"จำลอง {s.get('clocks')} clock: clk_out คาบ {o.get('period')} clock = หาร {o.get('period')}"
                 + (f" · duty {round(o['duty'] * 100)} %" if o.get("duty") is not None else ""))
     else:
         q = S.get("q") or next(iter(S.values()), {})
         vals = q.get("values") or []
+        if not q.get("period"):
+            raise RuntimeError("no period in %d clocks" % cyc)
         T.final(f"จำลอง {s.get('clocks')} clock: นับ {', '.join(str(v) for v in vals[:16])} แล้ววนกลับ — คาบ {q.get('period')} ค่า")
     return T.rows(users)
 
 
 def gen_sim_cycles():
-    for n in [3, 5, 7, 12, 20, 25, 30, 40]:
+    for n in [3, 5, 7, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60]:
         try:
             yield_rows(fam_sim_cycles("clock_divider", n, f"dv{n}"))
         except Exception as e:
             print("  cyc fail", n, e)
-    for n in [3, 6, 9, 11]:
+    for n in [3, 4, 6, 8, 9, 11, 13]:
         try:
             yield_rows(fam_sim_cycles("mod_counter", n, f"cn{n}"))
         except Exception as e:
@@ -603,7 +708,7 @@ def fam_sheet_question(N):
     T = Traj("qa_plain", {"ask": "divider", "N": N})
     users = [f"แผ่น div{N} ตอนนี้หารกี่เท่า เช็คให้หน่อย", f"div{N} หารได้เท่าไรจริงๆ", f"อธิบายแผ่น div{N} หน่อยว่าทำอะไร"]
     T.start(users[0])
-    cyc = min(2 * N + 4, 256)
+    cyc = cycles_for(N)
     (ok, s, cont), = T.turn([("simulate", {"sheet": f"div{N}", "cycles": cyc})])
     per = (((s or {}).get("summary") or {}).get("clk_out") or {}).get("period")
     T.final(f"div{N} หาร {per} ครับ — จำลอง {s.get('clocks')} clock เห็น clk_out คาบ {per} clock (ไม่ได้แก้อะไรในแผ่น)" if per

@@ -73,7 +73,7 @@ test("SFT2 report: probe facts in the answer, unchanged re-check, long simulate,
       locked: lockedCall.error };
   });
   expect(r.err).toBe(1);
-  expect(r.wrong).toMatch(/^⚠ คำตอบด้านล่างขัดกับผล probe \(err=1\)/);
+  expect(r.wrong).toMatch(/^⚠ คำตอบด้านล่างบอกค่าขาออกไม่ตรงกับผล probe \(err=1\)/);
   expect(r.right).toMatch(/ไฟ err ติด\n\n— ผลจาก probe ล่าสุด.*sw0=1.*err=1/s);
   expect(r.c1).toBeUndefined();
   expect(r.c2).toMatch(/Nothing on this sheet changed/);
@@ -115,7 +115,7 @@ test("v2.7.1 report: questions are read-only, request bits vs probe, no oracle o
   expect(r.c).toMatch(/^⚠ probe ไม่ได้ป้อนค่าตามคำขอ.*sw1 ควรเป็น 1.*err=1/s);
   expect(r.ov).toBeNull();
   expect(r.errSpec).toBeNull();
-  expect(r.fp).toMatch(/do the REST of the request/);
+  expect(r.fp).toMatch(/ALREADY built/);
   expect(r.spec).toBe(true);
   expect(r.per).toMatch(/^⚠ คำตอบบอก .*ทุก 50 clock.*คาบ 25/s);
   expect(r.qGuard).toBe("เพราะ 7-seg เป็น common anode");
@@ -128,4 +128,34 @@ test("probe: a bit range over a missing switch names the missing bit", async ({ 
     try { MCP_OPS.probe({ sheet: "sp", inputs: { "sw[5:2]": "1111" } }); return "no error"; } catch (e) { return e.message; }
   });
   expect(msg).toMatch(/no INPUT sw4/);
+});
+
+test("SFT3 report: divider spec by period, probe answer read at the output's name, no board verdict on a plain question, fast path names the rest", async ({ page }) => {
+  await openEditor(page);
+  const r = await page.evaluate(async () => {
+    await MCP_OPS.build_hierarchy({ sheet: "div25", blocks: [{ name: "d5a", part: "clock_divider", params: { n: 5 } }, { name: "d5b", part: "clock_divider", params: { n: 5 } }],
+      inputs: ["clk_in"], outputs: ["clk_out"], connect: [["clk_in", "d5a.clk_in"], ["d5a.clk_out", "d5b.clk_in"], ["d5b.clk_out", "clk_out"]] });
+    const s25 = MCP_OPS.set_spec({ sheet: "div25", formula: "clk_out = clk_in / 25" }).result;
+    const s20 = MCP_OPS.set_spec({ sheet: "div25", formula: "clk_out = clk_in ÷ 20" }).result;
+    await MCP_OPS.build_circuit({ sheet: "errchk", formula: "err = sw1 & sw2 & sw3" });
+    const pr = MCP_OPS.probe({ sheet: "errchk", inputs: { "sw[3:1]": "111" } });
+    const run = { message: "x", steps: [{ kind: "tool", tool: "probe", ok: true, args: { sheet: "errchk" }, full: { inputs: pr.inputs, outputs: pr.outputs } }] };
+    const okAns = aiagProbeFacts(run, "ไม่มี sw0 เลยป้อน sw4 = 0, sw1..sw3 = 1 → err = 1 (ติด)");
+    const badAns = aiagProbeFacts(run, "err ไม่ติดครับ");
+    const bv = aiagBoardVerdict({ message: "ทำไม 7-seg บนบอร์ด EDGE ต้องส่ง 0", final: "เพราะบอร์ดเป็น common anode", steps: [], touched: new Set() });
+    const keepCall = aiagCall; aiagCall = async (t, a) => ({ ok: true, result: await MCP_OPS[t](a) });
+    const fpRun = { steps: [] }; AIAG.cur = fpRun;
+    const fp = await aiagFastPath("ทำ mux 2:1 ชื่อแผ่น m2 แล้วลองเทสว่าถ้า s0=1 d0=0 d1=1 ขาออกเป็นเท่าไร", fpRun);
+    aiagCall = keepCall;
+    const again = await aiagCall("build_part", { kind: "mux", sheet: "m2b", params: { n: 2 } });
+    return { s25, s20, okAns, badAns, bv, fp: fp && fp.note, again: again.error };
+  });
+  expect(r.s25.pass).toBe(true);
+  expect(r.s25.checked).toMatch(/คาบ 25/);
+  expect(r.s20.pass).toBe(false);
+  expect(r.okAns).not.toMatch(/^⚠/);
+  expect(r.badAns).toMatch(/^⚠ คำตอบด้านล่างบอกค่าขาออกไม่ตรง/);
+  expect(r.bv).toBe("");
+  expect(r.fp).toMatch(/ALREADY built.*sheet 'm2'.*probe/s);
+  expect(r.again).toMatch(/already built the part on sheet 'm2'/);
 });
