@@ -396,12 +396,12 @@ def llama_processes(fresh: bool = False) -> list:
     if os.name == "nt":
         try:
             ps = ("Get-CimInstance Win32_Process -Filter \"name='llama-server.exe'\" | "
-                  "Select-Object ProcessId,ExecutablePath,WorkingSetSize,CommandLine | ConvertTo-Json -Compress")
+                  "Select-Object ProcessId,ExecutablePath,WorkingSetSize,PrivatePageCount,CommandLine | ConvertTo-Json -Compress")
             r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=15, creationflags=_NO_WINDOW)
             data = json.loads(r.stdout.decode("utf-8", "replace") or "[]")
             for d in ([data] if isinstance(data, dict) else data or []):
                 out.append({"pid": int(d.get("ProcessId") or 0), "path": d.get("ExecutablePath") or "",
-                            "mb": round(int(d.get("WorkingSetSize") or 0) / 2**20),
+                            "mb": round(int(d.get("PrivatePageCount") or d.get("WorkingSetSize") or 0) / 2**20),   # private, as Task Manager's "Memory"
                             "args": str(d.get("CommandLine") or "")[:400]})
         except Exception:
             pass

@@ -247,9 +247,9 @@ async function aiAgentRun(msg, opts){
       // a plan in words but no call: the same model writes the call again under a JSON-schema grammar (49)
       if(!calls.length && typeof aiagStructuredCall==="function" && (run.structTries||0)<2 && stopAt===Infinity){
         const plan=[m.content, thought].filter(Boolean).join("\n").trim(), done=run.steps.some(x=>x.kind==="tool" && x.ok && !x.fast_path);
-        // after tool work, only a reply that still says what it will do NEXT is a plan: a closing summary also has
-        // "→" / "ต่อ" in it ("clk → div5 …, ต่อครบแล้ว") and was turned into a build over the top sheet
-        if(plan && aiagWantsChange(run.message) && (!done || aiagPlanAhead(plan))){
+        // only before any work: after tool work a closing summary ("clk → div5 …, ต่อครบแล้ว") was turned into a
+        // build over the top sheet (2.7.0), and mid-run replies into set_top_sheet / check calls nobody asked for (2.7.1)
+        if(plan && aiagWantsChange(run.message) && !done){
           run.structTries=(run.structTries||0)+1; live("แปลงแผนเป็นคำสั่ง…");
           const sc=await aiagStructuredCall(run, messages, plan);
           if(sc){ calls=[sc]; run.steps.push({kind:"nudge", text:`no call in the reply — ${sc.function.name} written under the tool's schema (constrained decoding)`}); } } }
@@ -297,8 +297,11 @@ async function aiAgentRun(msg, opts){
           aiagLine(aiagStepHtml(st), "step");
           // which sheet this call worked on: the tool's own answer, else its argument, else the one on screen
           const on=(r.ok && r.result && r.result.sheet) || args.sheet || (activeSch()||{}).name;
-          if(r.ok && AIAG_EDIT_OPS.has(tool) && on){ needCheck.add(on); needSim.add(on); }
-          if(r.ok && (AIAG_EDIT_OPS.has(tool) || /^build_/.test(tool)) && on) run.touched.add(on);
+          // a rename / pin change is not a logic change: nothing to simulate, no request to check it against
+          const cosmetic=/^(set_pins|auto_pins|pin_preset)$/.test(tool)
+            || (tool==="update_component" && Object.keys(args).every(k=>/^(sheet|ref|name|x|y|rot)$/.test(k)));
+          if(r.ok && AIAG_EDIT_OPS.has(tool) && on && !cosmetic){ needCheck.add(on); needSim.add(on); }
+          if(r.ok && (AIAG_EDIT_OPS.has(tool) || /^build_/.test(tool)) && on && !cosmetic) run.touched.add(on);
           if(r.ok && tool==="check") needCheck.delete(on);
           const R=r.ok&&r.result||{}, circular=r.ok && (R.independent===false || R.pass===null || R.pending || (R.result&&(R.result.independent===false||R.result.pending)));
           // a spec still waiting for its circuit (set first, as asked) is not a failed check
