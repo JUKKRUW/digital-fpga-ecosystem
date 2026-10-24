@@ -24,6 +24,8 @@ function prjDropFromEditor(p){
   delete state.projects[p.id];
   if(p.id===state.activeProjectId){ state.activeProjectId=null; switchProject(Object.keys(state.projects)[0]); }
   renderAll();
+  // write the autosave now: it runs every 4 s, and an app closed before then brought the project back
+  try{ autosave(); }catch(_){}
 }
 MCP_OPS.delete_project = async a=>{
   const name=String(a.name||"").trim(); if(!name) mcpFail("name is required");

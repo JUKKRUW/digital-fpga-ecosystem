@@ -441,8 +441,23 @@ def rag_vectors(r):
                   + (f" — last error: {_EMB['err']}" if _EMB["err"] else "") + "; keyword search meanwhile")
 
 
+EMBED_IDLE = {"t": 0.0, "watch": False}
+EMBED_IDLE_S = 600      # the embedding server is only needed for a search: stopped after 10 idle minutes
+
+
+def _embed_idle_watch():
+    while True:
+        time.sleep(30)
+        if llm.embed_running() and not _EMB["busy"] and time.time() - EMBED_IDLE["t"] > EMBED_IDLE_S:
+            llm.stop_embed()
+
+
 def _embed_ready(wait: float) -> bool:
     """Start the embedding server if needed and wait (≤ wait s) until it answers."""
+    EMBED_IDLE["t"] = time.time()
+    if not EMBED_IDLE["watch"]:
+        EMBED_IDLE["watch"] = True
+        threading.Thread(target=_embed_idle_watch, daemon=True).start()
     server, _ = detect_llama()
     if not llm.embed_running() and not llm.start_embed(server).get("ok"):
         return False
@@ -865,6 +880,7 @@ class McpRelay:
         self.waiting = set()    # job ids a caller is still waiting for
         self.replies = {}       # job id -> reply
         self.late = {}          # job id -> op, for a call that gave up while the editor still ran it
+        self.late_t = {}        # job id -> when it was given up (entries older than an hour are dropped)
         self.finished = []      # [(time, job id, op, reply)] — late answers kept for last_result
         self.n = 0
         self.opened_at = 0.0
@@ -909,9 +925,14 @@ class McpRelay:
             self.cv.notify_all()
 
     def forget(self, client):
+        """The page closed or reloaded: what it ran or had queued is gone with it (a reloaded page left
+        job j2853 listed as running forever)."""
         with self.cv:
             self.seen.pop(client, None)
-            self.running.pop(client, None)
+            r = self.running.pop(client, None)
+            self.jobs.pop(client, None)
+            if r:
+                self.late.pop(r[0], None)
             self.cv.notify_all()
 
     def busy(self, client):
@@ -976,6 +997,7 @@ class McpRelay:
                             return {"ok": False, "error": f"the editor did not pick up '{op}' within {int(timeout)} s",
                                     "hint": "is the Schematic Studio window frozen or showing a dialog?"}
                         self.late[jid] = op
+                        self.late_t[jid] = time.time()
                         return {"ok": False, "error": f"'{op}' is still running in the editor after {int(timeout)} s",
                                 "job": jid,
                                 "hint": f"it finishes on its own — do NOT send it again; call last_result {{\"job\": \"{jid}\"}} "
@@ -990,6 +1012,9 @@ class McpRelay:
     def last_result(self, job=None, op=None):
         """The answer of a call that ran past its caller's timeout (newest first)."""
         with self.cv:
+            for jid in [j for j, t in self.late_t.items() if time.time() - t > 3600 or j not in self.late]:
+                self.late.pop(jid, None)
+                self.late_t.pop(jid, None)
             for t, jid, o, reply in reversed(self.finished):
                 if (job and jid == job) or (not job and (not op or o == op)):
                     return {"ok": True, "job": jid, "op": o, "finished_s_ago": int(time.time() - t), "reply": reply}
@@ -1370,6 +1395,8 @@ def make_handler():
                     return self._out(200, llm.cancel_download())
                 if path == "/api/llm/stop":
                     return self._out(200, llm.stop())
+                if path == "/api/llm/stop_embed":
+                    return self._out(200, llm.stop_embed())
                 if path == "/api/llm/start":
                     f = CFG["features"]
                     if data.get("model"):

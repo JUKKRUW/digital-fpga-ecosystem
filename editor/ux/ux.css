@@ -323,3 +323,7 @@
 .ag-rate button{border:1px solid transparent;background:none;cursor:pointer;font-size:14px;padding:1px 6px;border-radius:6px;opacity:.55}
 .ag-rate button:hover{opacity:1;border-color:var(--border,#ccc)}
 .ag-rate button.on{opacity:1;border-color:var(--accent,#4a7)}
+
+/* 58: lock a sheet against the agent */
+.tree-item .sr-lock{margin-left:auto;font-size:11px;opacity:0;cursor:pointer;padding:0 4px}
+.tree-item:hover .sr-lock,.tree-item .sr-lock.on{opacity:.75}
