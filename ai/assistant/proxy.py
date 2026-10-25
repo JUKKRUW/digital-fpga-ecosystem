@@ -18,6 +18,7 @@ import http.client
 import json
 import re
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -54,11 +55,16 @@ def sources_line(sources) -> str:
 class Hooks:
     """What the launcher plugs in. augment(question) -> {"system", "prefix", "sources"}; after(question, answer);
     touch() on every request (the launcher quits when no window of it is open: this window counts)."""
-    def __init__(self, upstream, augment, after=None, touch=None):
+    def __init__(self, upstream, augment, after=None, touch=None, call_tool=None):
         self.upstream = upstream        # () -> "http://127.0.0.1:8080"
-        self.augment = augment
+        self.augment = augment          # may return "tools" (OpenAI schemas) the model can call …
         self.after = after
         self.touch = touch or (lambda: None)
+        self.call_tool = call_tool      # … run by call_tool(name, args, sources) -> result text
+
+
+MAX_ROUNDS = 4          # tool rounds per question; the round after the last one answers without tools
+TOOL_LABEL = {"search_course": "ค้นเนื้อหาวิชา", "find_parts": "ค้นคลังชิ้นส่วน", "app_help": "ดูวิธีใช้โปรแกรม"}
 
 
 # the page pings while it is open (like launcher/web/shim.js in the app's own pages)
@@ -155,53 +161,132 @@ def make_handler(hooks: Hooks):
                     msgs.insert(0, {"role": "system", "content": aug["system"]})
             msgs[-1] = dict(msgs[-1], content=with_prefix(msgs[-1].get("content"), aug.get("prefix") or ""))
             body["messages"] = msgs
-            self._stream(json.dumps(body).encode("utf-8"), q, aug.get("sources") or [])
+            # our tools only when the page sent none of its own (llama-ui's MCP servers keep working as they do)
+            ours = bool(aug.get("tools")) and hooks.call_tool is not None and not body.get("tools")
+            if ours:
+                body["tools"] = aug["tools"]
+            self._run(body, q, list(aug.get("sources") or []), ours, aug.get("prefetch") if ours else None)
 
-        def _stream(self, data, q, sources):
-            try:
-                conn, resp = self._upstream("POST", data, {"Content-Type": "application/json"})
-            except Exception:
-                return self._pass("POST", data)
-            answer, thai = [], False
-            try:
-                self._headers(resp)
-                self.end_headers()
-                last = None
+        def _emit(self, ev):
+            self.wfile.write(("data: " + json.dumps(ev, ensure_ascii=False) + "\n\n").encode("utf-8"))
+            self.wfile.flush()
+
+        def _run(self, body, q, sources, ours, prefetch=None):
+            """Stream the answer to the page; a round that ends in tool calls is not shown as such: the app runs
+            the calls (a 🔎 line in the page's reasoning box says what was looked up), adds the results and asks
+            again, up to MAX_ROUNDS — the last round goes without tools, so it has to answer.
+            prefetch [(tool, args)]: calls the app makes before the first round, handed over as the model's own."""
+            answer, st = [], {"thai": False, "last": None, "sent": False}
+            pending = list(prefetch or [])
+            for rnd in range(MAX_ROUNDS + 1):
+                if pending:
+                    if not st["sent"]:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream")
+                        self.send_header("Cache-Control", "no-cache")
+                        self.end_headers()
+                        st["sent"] = True
+                        st["last"] = {"object": "chat.completion.chunk", "created": int(time.time()), "id": "chatcmpl-fe"}
+                    ids = [f"call_pre_{i}" for i in range(len(pending))]
+                    body["messages"] = body["messages"] + [{"role": "assistant", "content": "", "tool_calls": [
+                        {"id": i, "type": "function", "function": {"name": n, "arguments": json.dumps(a, ensure_ascii=False)}}
+                        for i, (n, a) in zip(ids, pending)]}]
+                    for i, (n, a) in zip(ids, pending):
+                        self._note(st, "🔎 " + TOOL_LABEL.get(n, n) + ": " + str(next(iter(a.values()), ""))[:80] + "\n")
+                        body["messages"].append({"role": "tool", "tool_call_id": i, "content": hooks.call_tool(n, a, sources)})
+                    pending = []
+                if rnd == MAX_ROUNDS and ours:
+                    body.pop("tools", None)
                 try:
+                    conn, resp = self._upstream("POST", json.dumps(body).encode("utf-8"), {"Content-Type": "application/json"})
+                except Exception:
+                    if not st["sent"]:
+                        return self._pass("POST", json.dumps(body).encode("utf-8"))
+                    break
+                calls, said = {}, []
+                try:
+                    if not st["sent"]:
+                        self._headers(resp)
+                        self.end_headers()
+                        st["sent"] = True
+                    if resp.status != 200:
+                        self.wfile.write(resp.read())
+                        return
                     while True:
                         line = resp.readline()
                         if not line:
                             break
                         s = line.decode("utf-8", "replace")
-                        if s.startswith("data:") and s[5:].strip() not in ("", "[DONE]"):
-                            try:
-                                ev = json.loads(s[5:])
-                                for ch in ev.get("choices") or []:
-                                    d = ch.get("delta") or {}
-                                    c = d.get("content")
-                                    if c:
-                                        thai = thai or bool(THAI.search(c))
-                                        if thai and CJK.search(c):
-                                            d["content"] = c = CJK.sub("", c)
-                                        answer.append(c)
-                                last = ev
-                                line = ("data: " + json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8")
-                            except ValueError:
-                                pass
-                        elif s.strip() == "data: [DONE]" and sources and answer and last is not None:
-                            # the sources as one more content piece, before the end of the stream
-                            extra = {k: v for k, v in last.items() if k not in ("choices", "usage", "timings")}
-                            extra["choices"] = [{"index": 0, "delta": {"content": sources_line(sources)}, "finish_reason": None}]
-                            self.wfile.write(("data: " + json.dumps(extra, ensure_ascii=False) + "\n\n").encode("utf-8"))
-                        self.wfile.write(line)
-                        self.wfile.flush()
+                        payload = s[5:].strip() if s.startswith("data:") else None
+                        if payload == "[DONE]":
+                            continue                 # ours is sent once, at the very end
+                        if not payload:
+                            continue                 # blank separators: _emit writes its own
+                        try:
+                            ev = json.loads(payload)
+                        except ValueError:
+                            self.wfile.write(line)
+                            continue
+                        for ch in ev.get("choices") or []:
+                            d = ch.get("delta") or {}
+                            for tc in ((d.pop("tool_calls", None) or []) if ours else []):
+                                c = calls.setdefault(tc.get("index", 0), {"id": "", "name": "", "args": ""})
+                                c["id"] = tc.get("id") or c["id"]
+                                fn = tc.get("function") or {}
+                                c["name"] += fn.get("name") or ""
+                                c["args"] += fn.get("arguments") or ""
+                            if ch.get("finish_reason") == "tool_calls" and ours:
+                                ch["finish_reason"] = None
+                            c = d.get("content")
+                            if c:
+                                st["thai"] = st["thai"] or bool(THAI.search(c))
+                                if st["thai"] and CJK.search(c):
+                                    d["content"] = c = CJK.sub("", c)
+                                answer.append(c)
+                                said.append(c)
+                        st["last"] = ev
+                        self._emit(ev)
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     return      # the page stopped: closing our side stops llama-server's generation
-            finally:
-                conn.close()
+                finally:
+                    conn.close()
+                if not (ours and calls and rnd < MAX_ROUNDS):
+                    break
+                order = [calls[i] for i in sorted(calls)]
+                for i, c in enumerate(order):
+                    c["id"] = c["id"] or f"call_{rnd}_{i}"
+                body["messages"] = body["messages"] + [{"role": "assistant", "content": "".join(said), "tool_calls": [
+                    {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["args"] or "{}"}} for c in order]}]
+                for c in order:
+                    try:
+                        args = json.loads(c["args"] or "{}")
+                    except ValueError:
+                        args = {}
+                    self._note(st, "🔎 " + TOOL_LABEL.get(c["name"], c["name"]) + ": " + str(next(iter(args.values()), "")) + "\n")
+                    result = hooks.call_tool(c["name"], args if isinstance(args, dict) else {}, sources)
+                    body["messages"].append({"role": "tool", "tool_call_id": c["id"], "content": result})
+            try:
+                if sources and answer and st["last"] is not None:
+                    self._piece(st, {"content": sources_line(sources)})
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+            except OSError:
+                return
             text = "".join(answer).strip()
             if hooks.after and text:
                 threading.Thread(target=hooks.after, args=(q, text), daemon=True).start()
+
+        def _piece(self, st, delta):
+            ev = {k: v for k, v in (st["last"] or {}).items() if k not in ("choices", "usage", "timings")}
+            ev["choices"] = [{"index": 0, "delta": delta, "finish_reason": None}]
+            self._emit(ev)
+
+        def _note(self, st, text):
+            """A line in the page's reasoning box (what the app is looking up for the model)."""
+            try:
+                self._piece(st, {"reasoning_content": text})
+            except OSError:
+                pass
 
     return H
 

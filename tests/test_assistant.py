@@ -209,5 +209,79 @@ class Proxy(unittest.TestCase):
         self.assertEqual(self.after[0][0], "q?")
 
 
+class ToolModel(BaseHTTPRequestHandler):
+    """Streams a find_parts call while it has no tool result, then an answer naming what the result said."""
+    seen = []
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        ToolModel.seen.append(body)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+        results = [m["content"] for m in body["messages"] if m["role"] == "tool"]
+        if len(results) < 2:      # one from the app's own look-up, one of its own
+            chunks = [{"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "c1", "function": {"name": "find_parts", "arguments": ""}}]}}]},
+                      {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": "{\"query\": \"debounce\"}"}}]}}]},
+                      {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}]
+        else:
+            name = "debounce" if "- debounce —" in results[-1] else "?"
+            chunks = [{"choices": [{"delta": {"content": f"ใช้ `{name}`"}, "finish_reason": "stop"}]}]
+        for c in chunks:
+            self.wfile.write(b"data: " + json.dumps(c, ensure_ascii=False).encode() + b"\n\n")
+        self.wfile.write(b"data: [DONE]\n\n")
+
+
+class Tools(unittest.TestCase):
+    def test_catalog_and_guide(self):
+        from assistant import tools as AT
+        t = AT.Toolbox(lambda q, k: [{"topic": "D Latch", "source": "Ch_5.pdf", "text": "x"}] * k)
+        self.assertIn("seg7_mux4", t.find_parts("7-segment 4 หลัก"))
+        self.assertIn("## เลือกขา", t.app_help("เลือกขาบอร์ด"))
+        src = [{"n": 1}]
+        self.assertTrue(t.search_course("latch", src).startswith("[2] D Latch · Ch_5.pdf"))
+        self.assertEqual(len(src), 1 + AT.COURSE_K)
+        self.assertEqual([n for n, _ in AT.prefetch("ทำนาฬิกาต้องใช้อะไรในคลังบ้าง")], ["find_parts"])
+        self.assertEqual([n for n, _ in AT.prefetch("เลือกขาในโปรแกรมยังไง")], ["app_help"])
+        self.assertEqual(AT.prefetch("latch กับ flip-flop ต่างกันยังไง"), [])
+
+    def test_proxy_runs_the_calls(self):
+        import urllib.request
+        from assistant import proxy as AP, tools as AT
+        up = ThreadingHTTPServer(("127.0.0.1", 0), ToolModel)
+        threading.Thread(target=up.serve_forever, daemon=True).start()
+        tb = AT.Toolbox()
+        px = AP.serve(AP.Hooks(lambda: f"http://127.0.0.1:{up.server_address[1]}",
+                               lambda q: {"system": "SYS", "tools": AT.SCHEMAS, "prefetch": AT.prefetch(q)},
+                               call_tool=tb.call), 0)
+        try:
+            body = {"stream": True, "messages": [{"role": "user", "content": "ปุ่มกดต้องใช้อะไรในคลัง"}]}
+            r = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{px.server_address[1]}/v1/chat/completions",
+                                                              json.dumps(body).encode(), {"Content-Type": "application/json"}))
+            text, notes, raw_calls = "", "", False
+            for line in r:
+                line = line.decode("utf-8")
+                if line.startswith("data:") and "[DONE]" not in line:
+                    for c in json.loads(line[5:]).get("choices") or []:
+                        d = c.get("delta") or {}
+                        text += d.get("content") or ""
+                        notes += d.get("reasoning_content") or ""
+                        raw_calls = raw_calls or bool(d.get("tool_calls")) or c.get("finish_reason") == "tool_calls"
+            self.assertEqual(text, "ใช้ `debounce`")
+            self.assertIn("🔎 ค้นคลังชิ้นส่วน: ปุ่มกดต้องใช้อะไรในคลัง", notes)
+            self.assertIn("🔎 ค้นคลังชิ้นส่วน: debounce", notes)
+            self.assertFalse(raw_calls)                          # the page never sees a call it would try to run
+            last = ToolModel.seen[-1]
+            self.assertEqual(last["messages"][0]["content"], "SYS")
+            self.assertEqual([m["role"] for m in last["messages"][1:]], ["user", "assistant", "tool", "assistant", "tool"])
+            self.assertTrue(last["tools"])
+        finally:
+            px.shutdown()
+            up.shutdown()
+
+
 if __name__ == "__main__":
     unittest.main()

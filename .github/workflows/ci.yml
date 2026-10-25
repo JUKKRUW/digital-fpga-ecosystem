@@ -35,6 +35,9 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Assistant catalog matches the editor's library
+        run: NODE_PATH=node_modules node tools/assistant/export_catalog.js --check
+
       - name: Browser tests
         run: npx playwright test
 

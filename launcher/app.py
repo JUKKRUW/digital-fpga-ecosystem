@@ -117,7 +117,8 @@ DEFAULTS = {
         "assistant_backend": "llama",   # the chat's ถาม-ตอบ model: llama (the app's llama-server) | ollama | openai
         "assistant_endpoint": "",       # ollama / openai: chat/completions URL (blank = Ollama's default)
         "assistant_model": "",          # ollama / openai: model name
-        "assistant_notes": True,        # course notes (RAG) in front of every question
+        "assistant_tools": True,        # llama-ui: the model calls search_course / find_parts / app_help itself
+        "assistant_notes": True,        # without tools (and in the editor's chat): course notes in front of every question
         "assistant_memory": True,       # remember what the user tells about themselves (<data>/assistant.sqlite)
         "assistant_port": 8771,         # llama-ui behind the app's proxy (Home ▸ ผู้ช่วย AI); a fixed port keeps its chats
         "cosim": False,           # GHDL co-simulation check
@@ -567,15 +568,27 @@ def assistant_memory():
     return _ASSIST["mem"]
 
 
+def assistant_toolbox():
+    if _ASSIST.get("tools") is None:
+        _assistant_mods()
+        from assistant import tools as AT
+        _ASSIST["tools"] = AT.Toolbox(lambda q, k: (rag_search(q, k=k, semantic=llm.embed_running(),
+                                                                prefer_verified=False) or {}).get("hits") or [])
+    return _ASSIST["tools"]
+
+
 def assistant_augment(q: str) -> dict:
-    """What llama-ui's question gets from the app (proxy.Hooks.augment): the system prompt, then in
-    front of the question the course notes and the memories that match it."""
+    """What llama-ui's question gets from the app (proxy.Hooks.augment): the system prompt and the memories
+    that match it; with assistant_tools on (the default) the model looks up course notes, the app's part
+    library and how-tos itself (tools.py) — off, the course notes go in front of every question."""
     if not CFG["features"].get("ai"):
         return {}
     _, AC = _assistant_mods()
     from assistant import memory as AM
+    from assistant import tools as AT
+    use_tools = CFG["features"].get("assistant_tools", True)
     parts, hits = [], []
-    if CFG["features"].get("assistant_notes", True):
+    if not use_tools and CFG["features"].get("assistant_notes", True):
         try:
             hits = (rag_search(q, k=AC.NOTES_K, semantic=llm.embed_running(), prefer_verified=False) or {}).get("hits") or []
         except Exception:
@@ -592,8 +605,9 @@ def assistant_augment(q: str) -> dict:
         mb = AM.block(store.search(q))
         if mb:
             parts.append(mb)
-    return {"system": AC.SYSTEM, "prefix": "\n\n".join(parts) + ("\n\n[คำถาม]\n" if parts else ""),
-            "sources": AC.sources(hits)}
+    return {"system": AC.system(tools=use_tools), "prefix": "\n\n".join(parts) + ("\n\n[คำถาม]\n" if parts else ""),
+            "sources": AC.sources(hits), "tools": AT.SCHEMAS if use_tools else None,
+            "prefetch": AT.prefetch(q) if use_tools else []}
 
 
 def assistant_after(q: str, answer: str) -> None:
@@ -614,7 +628,8 @@ def assistant_ui_start(port: int) -> None:
     def touch():        # llama-ui open = the app is in use (the watchdog quits after IDLE_SECONDS without)
         global LAST_PING
         LAST_PING = time.time()
-    _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch), port)
+    _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch,
+                                         lambda name, args, sources: assistant_toolbox().call(name, args, sources)), port)
 
 
 def assistant_ui_url() -> str:
