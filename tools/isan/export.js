@@ -47,6 +47,11 @@ const PLAN = [
   ["part", "counter_digit", cross({ m: R(2, 16), down: [false, true], load: [false, true], async: [true, false] })],
   ["part", "bcd_counter_multi", cross({ format: ["00-99", "000-999", "0000-9999", "00-59", "mm.ss", "99.59"], down: [false, true], load: [false, true] })],
   ["part", "seq_counter", cross({ values: ["2,3,5,7,11,13", "0..9", "0..99 step 3", "0,2,4,6,8", "1,3,5,7,9", "9..0", "0,1,3,7,15", "1,2,4,8"], en: [false, true] })],
+  ["part", "ring_counter", [...cross({ n: R(2, 16), how: ["shift"], down: [false, true], en: [false, true], clr: [false, true] }),
+    ...cross({ n: [4, 8, 16], how: ["decoder"], down: [false, true], en: [false, true], clr: [false, true] })]],
+  ["part", "ascii_case", cross({ mode: ["upper", "lower", "swap"] })], ["part", "hex_ascii", cross({ lower: [false, true] })],
+  ["part", "ascii_value", cross({ hex: [true, false] })],
+  ["part", "note_divider", cross({ note: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], octave: R(2, 7) })],
   ["div", "clock_divider", COMMON_N.map(n => ({ n }))],
   ["part", "alu_slice", cross({ ops: ["4", "8"] })], ["part", "alu", cross({ n: [4, 8], ops: ["4", "8"] })],
   ["part", "lab6_counter", [{}]], ["part", "lab7_countdown", [{}]],
@@ -58,6 +63,17 @@ const PLAN = [
     .map(([line1, line2]) => ({ line1, line2 }))],
   ["vhdl", "lcd_scroll", [["HELLO FROM FPGA EDGE SPARTAN-7", "FPGA EDGE"], ["WELCOME TO CE KMITL", "DIGITAL SYSTEM"], ["DIGITAL SYSTEM LAB", "VALUE: ####"], ["HELLO", "WORLD"], ["LAB 8 LDR SENSOR", "LIGHT: ####"], ["GOOD LUCK ON THE EXAM", "SCORE: ###"]]
     .flatMap(([text, other]) => cross({ row: [1, 2], right: [false, true], ms: [150, 300, 500] }).map(o => Object.assign({ text, other }, o)))],
+  ["vhdl", "note_tone", [...R(0, 8).map(octave => ({ octave })), { oct_in: true }]], ["vhdl", "piano", R(1, 7).map(octave => ({ octave }))],
+  ["vhdl", "melody", ["C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2",                                                     // twinkle twinkle
+    "E4 D4 C4 D4 E4 E4 E4:2 D4 D4 D4:2 E4 G4 G4:2 E4 D4 C4 D4 E4 E4 E4 E4 D4 D4 E4 D4 C4:4",                                // mary had a little lamb
+    "E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4:1.5 D4:0.5 D4:2",                                                             // ode to joy
+    "G4:0.5 G4:0.5 A4 G4 C5 B4:2 G4:0.5 G4:0.5 A4 G4 D5 C5:2 G4:0.5 G4:0.5 G5 E5 C5 B4 A4:2 F5:0.5 F5:0.5 E5 C5 D5 C5:2",   // happy birthday
+    "E4 E4 E4:2 E4 E4 E4:2 E4 G4 C4:1.5 D4:0.5 E4:4 F4 F4 F4:1.5 F4:0.5 F4 E4 E4 E4:0.5 E4:0.5 E4 D4 D4 E4 D4:2 G4:2",       // jingle bells
+    "C4 D4 E4 F4 G4 A4 B4 C5", "C5 B4 A4 G4 F4 E4 D4 C4"]
+    .flatMap(song => cross({ bpm: [90, 120, 160], loop: [true, false] }).map(o => Object.assign({ song }, o)))],
+  ["vhdl", "ascii_7seg", cross({ active_low: [true, false] })],
+  ["vhdl", "lcd_ascii", [["CHAR: @", "HEX:%% DEC:###"], ["@", "~~~~~~~~"], ["ASCII CODE", "@ = 0x%%"], ["KEY: @", "CODE: ###"]].map(([line1, line2]) => ({ line1, line2 }))],
+  ["vhdl", "uart_text", ["HELLO FPGA", "HELLO WORLD", "CE KMITL", "OK"].flatMap(text => cross({ baud: [9600, 115200], crlf: [true, false] }).map(o => Object.assign({ text }, o)))],
   ["vhdl", "adc_mcp3208", cross({ ch: R(0, 7) })], ["vhdl", "uart_tx", cross({ baud: [9600, 19200, 57600, 115200] })],
   ["vhdl", "tone", [262, 294, 330, 349, 392, 440, 494, 523, 1000, 2000].map(f => ({ f }))],
 ];

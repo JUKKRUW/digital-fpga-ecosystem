@@ -53,6 +53,7 @@ function partDialog(kind, opts){
       stages:"แบ่งเป็นขั้น (ไม่ใส่ = แบ่งให้อัตโนมัติ)", m:"นับถึง (m)", down:"นับลง", load:"มีขา load", format:"รูปแบบ"}[k]||(s.label||k);
     // a setting may start differently in this form than over MCP (s.uiDef): the agent's builds stay as trained
     s=Object.assign({}, s, s.uiDef!==undefined?{def:s.uiDef}:{});
+    if(s.hide) return "";                                  // a setting only the part's own check uses
     if(s.text) return `<label class="pt-f">${lab} <input type="text" data-pp="${k}" value="${esc(String(s.def))}" spellcheck="false" style="width:220px"></label>`;
     if(s.bool) return `<label class="pt-f"><input type="checkbox" data-pp="${k}" ${s.def?"checked":""}> ${lab}</label>`;
     if(s.options) return `<label class="pt-f">${lab} <select data-pp="${k}">${s.options.map(o=>`<option ${o===s.def?"selected":""}>${o}</option>`).join("")}</select></label>`;
