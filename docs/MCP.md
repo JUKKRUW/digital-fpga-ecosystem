@@ -166,13 +166,15 @@ closest notes automatically, and can call `search_course` for more. Search is by
 (Settings ▸ โมเดล AI ▸ Qwen3-Embedding 0.6B, 640 MB), it also searches by meaning, in Thai or English. That
 model runs on the CPU, so the graphics card stays free for the chat model.
 
-### Module library (the Modules tab)
+### Module library (Tools ▸ คลังชิ้นส่วนและโมดูล)
 - **Versions:** saving over a module bumps its version. **`update_module`** brings placed copies up to date in place;
   **`where_used`** lists them. **`use_module`** also takes a library part kind (the standard lab modules).
 - `list_modules` shows the library. It is shared by every project in the editor.
 - `save_module` stores a sheet in the library, together with every sheet it uses as a block.
 - `use_module` places a module as a block, and `open_module` opens it as a sheet you can edit.
 - `delete_module` removes a module from the library.
+- `set_module_category` puts a module in a category of the library window: a built-in one (ตัวนับ, จอ 7-segment …),
+  `กองกลาง` (not sorted) or a new name. `list_modules` shows each module's `category`.
 
 ### Testing the app's own AI
 Claude can use the app's AI feature the same way the user does, and see what goes wrong:
