@@ -75,9 +75,13 @@ CATALOG = [
 # -c 24576: the agent's prompts stay under ~14k tokens; a 64K context made a 3.5 GB model take 6.4 GB
 # (the KV cache is allocated in full at start), and with the editor + browser that left ~1 GB free — the
 # page was reloaded by the browser and MCP calls timed out. --cache-ram 256 for the same reason.
-DEFAULT_ARGS = "-c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256"
+# -fitt 512: --fit leaves 1 GB of VRAM free by default; 512 MB puts more layers on the GPU. Qwen3.5 9B Q4 on an
+# RTX 4050 6 GB (assistant prompt, 1.3k tokens): 16.5 → 19 token/s, prompt 615 → 730 t/s, 4.1 → 4.5 GB VRAM.
+# (-nkvo, the KV cache in RAM, was slower: 11 token/s — Qwen3.5's KV cache is small, the layers matter.)
+DEFAULT_ARGS = "-c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256 -fitt 512"
 OLD_DEFAULT_ARGS = ("-c 8192 --jinja -ngl 999", "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0",
-                    "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 1024")
+                    "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 1024",
+                    "-c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256")
 
 # semantic search over the course notes (RAG): a small embedding model on its own llama-server,
 # CPU-only (-ngl 0) so the GPU stays with the chat model. Kept in models/embed/ so it is never
