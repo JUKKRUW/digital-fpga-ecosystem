@@ -43,12 +43,16 @@ function partsSectionHtml(){
   try{ renderModulesPane(); }catch(_){}
 }
 /* the form: parameters, ports preview, place / open */
-function partDialog(kind){
+function partDialog(kind, opts){
   const P=PARTS[kind]; if(!P) return;
   const params=P.params||{};
   const field=(k,s)=>{
     const lab={n:"ขนาด (N)", cin:"มีขา cin", en:"มีขา enable", odd:"parity คี่", active_low:"active-low (บอร์ด EDGE)", output:"ขาออก",
-      values:"ลำดับค่า", text:"ข้อความ", mode:"รูปแบบ", clr:"มีขา clr", set:"ชุดตัวอักษร", blank0:"รหัส 0 = ว่าง"}[k]||k;
+      values:"ลำดับค่า", text:"ข้อความ", mode:"รูปแบบ", clr:"มีขา clr", set:"ชุดตัวอักษร", blank0:"รหัส 0 = ว่าง",
+      async:"ใช้ async reset / preset ของ flip-flop (วงจรเล็กลง)", blocks:"ประกอบจากบล็อกย่อย (วาดเป็นชั้น อ่านง่าย)",
+      stages:"แบ่งเป็นขั้น (ไม่ใส่ = แบ่งให้อัตโนมัติ)", m:"นับถึง (m)", down:"นับลง", load:"มีขา load", format:"รูปแบบ"}[k]||(s.label||k);
+    // a setting may start differently in this form than over MCP (s.uiDef): the agent's builds stay as trained
+    s=Object.assign({}, s, s.uiDef!==undefined?{def:s.uiDef}:{});
     if(s.text) return `<label class="pt-f">${lab} <input type="text" data-pp="${k}" value="${esc(String(s.def))}" spellcheck="false" style="width:220px"></label>`;
     if(s.bool) return `<label class="pt-f"><input type="checkbox" data-pp="${k}" ${s.def?"checked":""}> ${lab}</label>`;
     if(s.options) return `<label class="pt-f">${lab} <select data-pp="${k}">${s.options.map(o=>`<option ${o===s.def?"selected":""}>${o}</option>`).join("")}</select></label>`;
@@ -62,13 +66,16 @@ function partDialog(kind){
     <div class="pt-ports" id="ptPorts"></div>
     <div class="muted" style="font-size:11.5px;margin-top:8px">สร้างแล้วระบบจำลองเทียบกับโมเดลอ้างอิงให้ทุกครั้ง — ถ้าไม่ตรงจะไม่วาดออกมา</div>`,
     {width:480, foot:`<button class="btn" id="ptOpen">เปิดเป็นแผ่นใหม่</button><button class="btn btn-primary" id="ptPlace">วางเป็นบล็อกบนแผ่นนี้</button>`});
+  if(P.ui && P.ui.extra) m.querySelector(".pt-form").insertAdjacentHTML("beforeend", P.ui.extra);
   const read=()=>{ const a={kind};
     m.querySelectorAll("[data-pp]").forEach(e=>{ const k=e.dataset.pp;
       if(e.type==="checkbox") a[k]=e.checked; else if(e.type==="number") a[k]=+e.value; else if(e.value.trim()) a[k]=e.value.trim(); });
-    if(!a.sheet) delete a.sheet; return a; };
-  const preview=()=>{ const el=m.querySelector("#ptPorts"); try{ const a=read(); const p=partParams(kind, a); const pp=P.ports(p);
+    if(!a.sheet) delete a.sheet;
+    // a UI-only choice may turn the request into another part (÷5000 → a chain of ÷5 ÷10 ÷10 ÷10)
+    return P.ui && P.ui.swap ? P.ui.swap(a) : a; };
+  const preview=()=>{ const el=m.querySelector("#ptPorts"); try{ const a=read(), K=PARTS[a.kind]||P; const p=partParams(a.kind||kind, a); const pp=K.ports(p);
       const fmt=o=>Object.entries(o).filter(([,w])=>w>0).map(([b,w])=>w>1?(a.bus?`${b}[${w-1}:0]`:`${b}${w-1}..${b}0`):b).join(", ");
-      el.innerHTML=`<b>ขาเข้า</b> ${esc(fmt(pp.in))}<br><b>ขาออก</b> ${esc(fmt(pp.out))}`; el.classList.remove("bad"); return true; }
+      el.innerHTML=`<b>ขาเข้า</b> ${esc(fmt(pp.in))}<br><b>ขาออก</b> ${esc(fmt(pp.out))}`+(K.plan?`<br><span class="muted">${esc(K.plan(p))}</span>`:""); el.classList.remove("bad"); return true; }
     catch(e){ el.textContent=e.message; el.classList.add("bad"); return false; } };
   m.addEventListener("input", preview); preview();
   const go=async place=>{ if(!preview()) return;
@@ -80,6 +87,7 @@ function partDialog(kind){
     try{
       const r=MCP_OPS.build_part(a);
       m.close();
+      if(opts && opts.onDone) try{ opts.onDone(r); }catch(_){}
       if(place && back && back.id!==(Object.values(state.project.schematics).find(s=>s.name===r.sheet)||{}).id){
         openSchTab(back.id);
         const sub=Object.values(state.project.schematics).find(s=>s.name===r.sheet);

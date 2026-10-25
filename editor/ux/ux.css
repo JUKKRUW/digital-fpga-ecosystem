@@ -332,3 +332,42 @@
 #canvas .bp-clk rect{fill:var(--bg-1);stroke:var(--accent);stroke-width:1}
 #canvas .bp-clk text{font-size:10px;fill:var(--accent);font-weight:700;pointer-events:none}
 #canvas .bp-clk:hover rect{fill:var(--accent)} #canvas .bp-clk:hover text{fill:var(--bg-0)}
+/* 64 — the part / module library window */
+.lib-bg .modal{width:1080px;max-width:96vw;height:86vh}
+.lib-bg .modal-body{padding:12px 14px;display:flex;flex-direction:column;min-height:0}
+.lib-win{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.lib-top{display:flex;gap:10px;align-items:center}
+.lib-top .mod-search{flex:1;margin:0}
+.lib-body{display:flex;gap:12px;flex:1;min-height:0}
+.lib-side{flex:none;width:240px;overflow:auto;display:flex;flex-direction:column;gap:2px;padding-right:4px;border-right:1px solid var(--line)}
+.lib-cat{display:flex;align-items:center;gap:8px;text-align:left;background:transparent;border:1px solid transparent;border-radius:7px;padding:6px 8px;font-size:12.5px;color:var(--ink);cursor:pointer}
+.lib-cat:hover{background:var(--bg-2)}
+.lib-cat.on{background:var(--bg-2);border-color:var(--accent);font-weight:600}
+.lib-cat .ic{width:20px;text-align:center;flex:none}
+.lib-cat .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-cat .n{font-size:10.5px;color:var(--muted)}
+.lib-sep{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:10px 8px 2px;letter-spacing:.04em}
+.lib-main{flex:1;min-width:0;overflow:auto}
+.lib-mh{display:flex;align-items:center;gap:10px;margin:2px 2px 10px;font-size:14px}
+.lib-mh .btn{margin-left:auto}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.lib-card{display:flex;flex-direction:column;gap:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:10px;min-width:0}
+.lib-card:hover{border-color:var(--accent)}
+.lib-card.part{cursor:pointer}
+.lib-row{display:flex;gap:8px}
+.lib-ct{font-size:13px;line-height:1.35}
+.lib-cd{font-size:11.5px;color:var(--ink-dim);line-height:1.45;flex:1}
+.lib-ca{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lib-ca .muted{font-size:10.5px;margin-left:auto}
+.lib-empty{padding:30px 10px;font-size:12.5px}
+.lib-foot{font-size:11px}
+.pt-badge.mine{color:var(--accent);border-color:var(--accent)}
+.gen-mi.lib-mi b{font-weight:600}
+@media (max-width:700px){ .lib-side{width:150px} }
+.lib-sh{font-size:12.5px;font-weight:700;margin:14px 2px 8px;cursor:pointer;color:var(--ink)}
+.lib-sh:first-of-type{margin-top:2px}
+.lib-sh:hover{color:var(--accent)}
+.lib-cat .ic, .lib-sh .ic, .lib-mh .ic{color:var(--accent);font-weight:700}
+.lib-io{font-size:11px;line-height:1.5;color:var(--ink);background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-family:"JetBrains Mono",monospace;word-break:break-word}
+.lib-io b{font-family:inherit;color:var(--ink-dim);font-weight:600}
+.lib-grp{font-size:10.5px}

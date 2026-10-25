@@ -418,6 +418,9 @@ TOOLS = [
       {"sheet": SHEET, "name": {"type": "string"}, "description": {"type": "string"},
        "replace": {"type": "boolean", "description": "overwrite a module with the same name"},
        "force": {"type": "boolean", "description": "save a sheet that is not verified (only when the user asks for it)"}}),
+    T("set_module_category", "Put a library module in a category of the library window (Tools ▸ คลังชิ้นส่วนและโมดูล): one of "
+      "the built-in categories (list_modules shows them on each module), 'กองกลาง' (not sorted) or a new name.",
+      {"module": {"type": "string"}, "category": {"type": "string"}}, ["module", "category"]),
     T("where_used", "Every copy of a library module in the projects open in the editor: which sheet, its version (outdated or "
       "not) and the sheets that place it.", {"module": {"type": "string"}}, ["module"]),
     T("update_module", "Bring the copies of a module placed in this project (all_projects: every open project) up to the "

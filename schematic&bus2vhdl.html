@@ -3487,6 +3487,7 @@ function reorderSubPins(block, dir, orderedPids){
   const newCids=orderedPids.map(pid=>cidByPid.get(pid)).filter(Boolean);
   if(newCids.length!==blocks.length || new Set(newCids).size!==blocks.length) return false;  // must be a permutation
   if(newCids.every((cid,i)=>cid===blocks[i].id)) return false;                                // no change
+  const oldOrder=side.map(p=>p.id);
   newCids.forEach((cid,i)=>{ const b=sub.components.find(c=>c.id===cid); if(b){ b.x=slots[i].x; b.y=slots[i].y; } });
   // a generated sheet lists its pins in sub.portOrder, which schPortList reads before positions: the
   // blocks moved but the symbol kept its order (the drag looked like it did nothing) — keep both in step
@@ -3498,6 +3499,8 @@ function reorderSubPins(block, dir, orderedPids){
   // the wires on the moved port blocks still ran to the old spots (a locked sheet is not healed): re-route them
   if(typeof wtReroute==="function"){ const moved=new Set(newCids);
     try{ wtReroute(sub, new Set(sub.wires.filter(w=>moved.has(w.from.cid)||moved.has(w.to.cid)).map(w=>w.id))); }catch(e){ console.warn("reorder re-route", e); } }
+  // every placed copy of this block: the IN/OUT tags on its pins follow the new order, its wires re-route (UX 63)
+  if(typeof uxPinsFollow==="function"){ try{ uxPinsFollow(sub, dir, oldOrder); }catch(e){ console.warn("pins follow", e); } }
   snapshot(); renderAll();
   return true;
 }
@@ -7094,8 +7097,10 @@ function probeModel(sch, st){
         v = ok ? inVal(cid,"d"+sel,guard) : null;
       }
       else if(PROBE_SEQ[c.type]){
-        const p=c.params||{}, r=p.reset?inVal(cid,"rst",guard):null, s=p.preset?inVal(cid,"pre",guard):null;
-        const q = r===1?0 : s===1?1 : (PROBE_FF[cid]?1:0);
+        // Q is the stored state: probeSettle applies async reset / preset to it before anything reads it.
+        // (Overriding Q here from rst / pre looped on a counter that resets itself — rst = q3·q1 → Q → rst —
+        // and the guard's null was memoised on the rst net, so the reset never fired.)
+        const q = PROBE_FF[cid]?1:0;
         v = pid==="qn" ? 1-q : q;
       }
       // SCH: / CUSTOM: never reach here — flattenSchematic already inlined them
@@ -13324,6 +13329,45 @@ init();
 #canvas .bp-clk rect{fill:var(--bg-1);stroke:var(--accent);stroke-width:1}
 #canvas .bp-clk text{font-size:10px;fill:var(--accent);font-weight:700;pointer-events:none}
 #canvas .bp-clk:hover rect{fill:var(--accent)} #canvas .bp-clk:hover text{fill:var(--bg-0)}
+/* 64 — the part / module library window */
+.lib-bg .modal{width:1080px;max-width:96vw;height:86vh}
+.lib-bg .modal-body{padding:12px 14px;display:flex;flex-direction:column;min-height:0}
+.lib-win{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.lib-top{display:flex;gap:10px;align-items:center}
+.lib-top .mod-search{flex:1;margin:0}
+.lib-body{display:flex;gap:12px;flex:1;min-height:0}
+.lib-side{flex:none;width:240px;overflow:auto;display:flex;flex-direction:column;gap:2px;padding-right:4px;border-right:1px solid var(--line)}
+.lib-cat{display:flex;align-items:center;gap:8px;text-align:left;background:transparent;border:1px solid transparent;border-radius:7px;padding:6px 8px;font-size:12.5px;color:var(--ink);cursor:pointer}
+.lib-cat:hover{background:var(--bg-2)}
+.lib-cat.on{background:var(--bg-2);border-color:var(--accent);font-weight:600}
+.lib-cat .ic{width:20px;text-align:center;flex:none}
+.lib-cat .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-cat .n{font-size:10.5px;color:var(--muted)}
+.lib-sep{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:10px 8px 2px;letter-spacing:.04em}
+.lib-main{flex:1;min-width:0;overflow:auto}
+.lib-mh{display:flex;align-items:center;gap:10px;margin:2px 2px 10px;font-size:14px}
+.lib-mh .btn{margin-left:auto}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.lib-card{display:flex;flex-direction:column;gap:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:10px;min-width:0}
+.lib-card:hover{border-color:var(--accent)}
+.lib-card.part{cursor:pointer}
+.lib-row{display:flex;gap:8px}
+.lib-ct{font-size:13px;line-height:1.35}
+.lib-cd{font-size:11.5px;color:var(--ink-dim);line-height:1.45;flex:1}
+.lib-ca{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lib-ca .muted{font-size:10.5px;margin-left:auto}
+.lib-empty{padding:30px 10px;font-size:12.5px}
+.lib-foot{font-size:11px}
+.pt-badge.mine{color:var(--accent);border-color:var(--accent)}
+.gen-mi.lib-mi b{font-weight:600}
+@media (max-width:700px){ .lib-side{width:150px} }
+.lib-sh{font-size:12.5px;font-weight:700;margin:14px 2px 8px;cursor:pointer;color:var(--ink)}
+.lib-sh:first-of-type{margin-top:2px}
+.lib-sh:hover{color:var(--accent)}
+.lib-cat .ic, .lib-sh .ic, .lib-mh .ic{color:var(--accent);font-weight:700}
+.lib-io{font-size:11px;line-height:1.5;color:var(--ink);background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-family:"JetBrains Mono",monospace;word-break:break-word}
+.lib-io b{font-family:inherit;color:var(--ink-dim);font-weight:600}
+.lib-grp{font-size:10.5px}
 </style>
 <script>
 "use strict";
@@ -18873,12 +18917,16 @@ function partsSectionHtml(){
   try{ renderModulesPane(); }catch(_){}
 }
 /* the form: parameters, ports preview, place / open */
-function partDialog(kind){
+function partDialog(kind, opts){
   const P=PARTS[kind]; if(!P) return;
   const params=P.params||{};
   const field=(k,s)=>{
     const lab={n:"ขนาด (N)", cin:"มีขา cin", en:"มีขา enable", odd:"parity คี่", active_low:"active-low (บอร์ด EDGE)", output:"ขาออก",
-      values:"ลำดับค่า", text:"ข้อความ", mode:"รูปแบบ", clr:"มีขา clr", set:"ชุดตัวอักษร", blank0:"รหัส 0 = ว่าง"}[k]||k;
+      values:"ลำดับค่า", text:"ข้อความ", mode:"รูปแบบ", clr:"มีขา clr", set:"ชุดตัวอักษร", blank0:"รหัส 0 = ว่าง",
+      async:"ใช้ async reset / preset ของ flip-flop (วงจรเล็กลง)", blocks:"ประกอบจากบล็อกย่อย (วาดเป็นชั้น อ่านง่าย)",
+      stages:"แบ่งเป็นขั้น (ไม่ใส่ = แบ่งให้อัตโนมัติ)", m:"นับถึง (m)", down:"นับลง", load:"มีขา load", format:"รูปแบบ"}[k]||(s.label||k);
+    // a setting may start differently in this form than over MCP (s.uiDef): the agent's builds stay as trained
+    s=Object.assign({}, s, s.uiDef!==undefined?{def:s.uiDef}:{});
     if(s.text) return `<label class="pt-f">${lab} <input type="text" data-pp="${k}" value="${esc(String(s.def))}" spellcheck="false" style="width:220px"></label>`;
     if(s.bool) return `<label class="pt-f"><input type="checkbox" data-pp="${k}" ${s.def?"checked":""}> ${lab}</label>`;
     if(s.options) return `<label class="pt-f">${lab} <select data-pp="${k}">${s.options.map(o=>`<option ${o===s.def?"selected":""}>${o}</option>`).join("")}</select></label>`;
@@ -18892,13 +18940,16 @@ function partDialog(kind){
     <div class="pt-ports" id="ptPorts"></div>
     <div class="muted" style="font-size:11.5px;margin-top:8px">สร้างแล้วระบบจำลองเทียบกับโมเดลอ้างอิงให้ทุกครั้ง — ถ้าไม่ตรงจะไม่วาดออกมา</div>`,
     {width:480, foot:`<button class="btn" id="ptOpen">เปิดเป็นแผ่นใหม่</button><button class="btn btn-primary" id="ptPlace">วางเป็นบล็อกบนแผ่นนี้</button>`});
+  if(P.ui && P.ui.extra) m.querySelector(".pt-form").insertAdjacentHTML("beforeend", P.ui.extra);
   const read=()=>{ const a={kind};
     m.querySelectorAll("[data-pp]").forEach(e=>{ const k=e.dataset.pp;
       if(e.type==="checkbox") a[k]=e.checked; else if(e.type==="number") a[k]=+e.value; else if(e.value.trim()) a[k]=e.value.trim(); });
-    if(!a.sheet) delete a.sheet; return a; };
-  const preview=()=>{ const el=m.querySelector("#ptPorts"); try{ const a=read(); const p=partParams(kind, a); const pp=P.ports(p);
+    if(!a.sheet) delete a.sheet;
+    // a UI-only choice may turn the request into another part (÷5000 → a chain of ÷5 ÷10 ÷10 ÷10)
+    return P.ui && P.ui.swap ? P.ui.swap(a) : a; };
+  const preview=()=>{ const el=m.querySelector("#ptPorts"); try{ const a=read(), K=PARTS[a.kind]||P; const p=partParams(a.kind||kind, a); const pp=K.ports(p);
       const fmt=o=>Object.entries(o).filter(([,w])=>w>0).map(([b,w])=>w>1?(a.bus?`${b}[${w-1}:0]`:`${b}${w-1}..${b}0`):b).join(", ");
-      el.innerHTML=`<b>ขาเข้า</b> ${esc(fmt(pp.in))}<br><b>ขาออก</b> ${esc(fmt(pp.out))}`; el.classList.remove("bad"); return true; }
+      el.innerHTML=`<b>ขาเข้า</b> ${esc(fmt(pp.in))}<br><b>ขาออก</b> ${esc(fmt(pp.out))}`+(K.plan?`<br><span class="muted">${esc(K.plan(p))}</span>`:""); el.classList.remove("bad"); return true; }
     catch(e){ el.textContent=e.message; el.classList.add("bad"); return false; } };
   m.addEventListener("input", preview); preview();
   const go=async place=>{ if(!preview()) return;
@@ -18910,6 +18961,7 @@ function partDialog(kind){
     try{
       const r=MCP_OPS.build_part(a);
       m.close();
+      if(opts && opts.onDone) try{ opts.onDone(r); }catch(_){}
       if(place && back && back.id!==(Object.values(state.project.schematics).find(s=>s.name===r.sheet)||{}).id){
         openSchTab(back.id);
         const sub=Object.values(state.project.schematics).find(s=>s.name===r.sheet);
@@ -19654,12 +19706,12 @@ function boardDoctor(sch){
     const b=bits.find(x=>x.port===sanId(c.params.name)&&x.bit==null)||{}, t=b.t||"";
     if(/^pb:/.test(t)) add("warn",`นาฬิกา ${c.params.name} มาจากปุ่มกด`,
       "หน้าสัมผัสปุ่มเด้ง (bounce) — กดหนึ่งครั้งอาจได้ขอบขาขึ้นหลายสิบครั้ง ตัวนับจะกระโดดข้ามหลายค่า",
-      "ใช้นาฬิกา 50 MHz + ตัวหารความถี่ แล้วใช้ปุ่มเป็น enable ผ่านชิ้นส่วน Debounce (แท็บ Modules ▸ ชิ้นส่วน)");
+      "ใช้นาฬิกา 50 MHz + ตัวหารความถี่ แล้วใช้ปุ่มเป็น enable ผ่านชิ้นส่วน Debounce (Tools ▸ คลังชิ้นส่วนและโมดูล)");
     else if(/^sw:/.test(t)) add("info",`นาฬิกา ${c.params.name} มาจากสวิตช์เลื่อน`,
       "ใช้ทดสอบทีละ clock ได้ แต่สวิตช์ก็เด้งได้บ้าง ถ้านับข้ามบางครั้งเป็นเพราะเรื่องนี้","");
     else if(t==="clk" && ffs.length<20 && (leds.length||segs.length)) add("warn",`วงจรใช้นาฬิกา 50 MHz ตรงๆ (มี flip-flop ${ffs.length} ตัว)`,
       "ค่าเปลี่ยน 50 ล้านครั้งต่อวินาที — ตาเห็น LED ติดสลัวๆ ค้าง ไม่เห็นการนับ",
-      "ถ้าอยากเห็นการนับ ใส่ตัวหารความถี่ (เช่น ÷50000000 = 1 Hz) ระหว่าง clk กับวงจร — แท็บ Modules ▸ ชิ้นส่วน ▸ หารความถี่");
+      "ถ้าอยากเห็นการนับ ใส่ตัวหารความถี่ (เช่น ÷50000000 = 1 Hz) ระหว่าง clk กับวงจร — Tools ▸ คลังชิ้นส่วนและโมดูล ▸ นาฬิกา / หารความถี่");
   });
   if(BRD.tools){ if(!BRD.tools.vivado) add("info","ยังไม่พบ Vivado","สร้าง .bit ไม่ได้จนกว่าจะติดตั้ง/ตั้งที่อยู่ของ Vivado","หน้า Home ▸ เริ่มต้นใช้งาน");
     if(!BRD.tools.openfpgaloader) add("info","ยังไม่พบ openFPGALoader","โหลดลงบอร์ดไม่ได้","ติดตั้งโปรแกรมรุ่นเต็ม (มี openFPGALoader มาด้วย)"); }
@@ -19897,7 +19949,7 @@ function bhDiag(id, F){
         "แก้ในหน้าเลือกขา แล้วสร้าง .bit ใหม่"], pins:true},
     segpol:{title:"7-segment กลับสี", checks:[
       doc(/active-high/).length ? bad("วงจรนี้เขียน a–g แบบ active-high (1 = ติด) — แต่จอบนบอร์ดเป็น common-anode: 0 = ติด") : ok("ตารางของวงจรออกแบบ active-low แล้ว — ถ้ายังกลับสี ตรวจว่ามี NOT เกินมาที่ขา a–g ไหม")],
-      tips:["ใช้ชิ้นส่วน “BCD → 7-segment” แบบ active-low (แท็บ Modules ▸ ชิ้นส่วน) หรือใส่ NOT ที่ขา a–g ทุกขา"]},
+      tips:["ใช้ชิ้นส่วน “BCD → 7-segment” แบบ active-low (Tools ▸ คลังชิ้นส่วนและโมดูล) หรือใส่ NOT ที่ขา a–g ทุกขา"]},
     segan:{title:"เรื่องหลักของ 7-segment", checks:[
       F.ans.length ? mapTable(F.ans,"ขาเลือกหลัก:") : bad("ไม่ได้ขับขาเลือกหลัก (an0–an3) — หลักจะติดตามค่าเริ่มต้นของบอร์ด ซึ่งอาจเป็นทุกหลักหรือไม่ติดเลย"),
       ...doc(/ทุกหลักดับ/).map(f=>bad(esc(f.title)))].filter(Boolean),
@@ -19911,7 +19963,7 @@ function bhDiag(id, F){
     fast:{title:"ติดสลัวค้าง = เปลี่ยนเร็วเกินตาเห็น", checks:[
       F.clock&&F.clock.t==="clk" ? bad(`นาฬิกา <b>${esc(F.clock.name)}</b> มาจาก 50 MHz ตรงๆ — ค่าเปลี่ยน 50 ล้านครั้งต่อวินาที`) : ok("นาฬิกาไม่ได้มาจาก 50 MHz ตรงๆ — ถ้ายังสลัว ตรวจว่าตัวหารความถี่หารพอไหม"),
       ok(`มี flip-flop ${F.ffs} ตัว`)],
-      tips:["ใส่ตัวหารความถี่ระหว่าง clk กับวงจร: ÷50000000 = 1 Hz, ÷5000000 = 10 Hz (แท็บ Modules ▸ ชิ้นส่วน ▸ หารความถี่)",
+      tips:["ใส่ตัวหารความถี่ระหว่าง clk กับวงจร: ÷50000000 = 1 Hz, ÷5000000 = 10 Hz (Tools ▸ คลังชิ้นส่วนและโมดูล ▸ นาฬิกา / หารความถี่)",
         "ในหน้าจำลอง “⚡ เล่นเวลาจริง (50 MHz)” จะเห็นอาการเดียวกันก่อนลงบอร์ด"]},
     stuck:{title:"ตัวนับไม่เดิน", checks:[
       staleLine,
@@ -19925,7 +19977,7 @@ function bhDiag(id, F){
       F.clock&&/^(pb|sw):/.test(F.clock.t||"") ? bad(`นาฬิกา <b>${esc(F.clock.name)}</b> มาจาก ${esc(pinTargetLabel(F.clock.t))} — กดหนึ่งครั้งหน้าสัมผัสเด้งหลายสิบครั้ง แต่ละครั้งเป็นขอบขาขึ้นใหม่`) : ok("นาฬิกาไม่ได้มาจากปุ่มโดยตรง — ถ้าปุ่มเป็น enable ก็ควรผ่าน debounce เหมือนกัน")],
       tips:["ใช้ clk 50 MHz + ตัวหาร (~100 Hz) เป็นนาฬิกาของชิ้นส่วน Debounce แล้วต่อ Edge detector ให้ได้ 1 พัลส์ต่อการกด 1 ครั้ง",
         "จากนั้นใช้พัลส์นั้นเป็น enable ของตัวนับ (ตัวนับยังใช้นาฬิกาเดียวกันทั้งวงจร)",
-        "ทั้งสามอย่างอยู่ในแท็บ Modules ▸ ชิ้นส่วน"]},
+        "ทั้งสามอย่างอยู่ใน Tools ▸ คลังชิ้นส่วนและโมดูล"]},
     btninv:{title:"ปุ่มทำงานกลับด้าน", checks:[F.pbs.length?mapTable(F.pbs,"ปุ่มที่วงจรใช้:"):bad("วงจรนี้ไม่ได้ใช้ปุ่มกด")].filter(Boolean),
       tips:["ปุ่มของบอร์ด EDGE เป็น active-high: ไม่กด = 0, กด = 1 (ใบแลป 9) — ถ้าวงจรทำงานตอนปล่อย มักเพราะมี NOT เกินมา หรือใช้ขอบขาลงของ flip-flop",
         "ตรวจว่าจับขอบขาขึ้น (edge = rising) และไม่มี NOT หลัง INPUT ของปุ่ม — หรือใช้ชิ้นส่วน “ปุ่มกด → 1 พัลส์” แทน",
@@ -24794,6 +24846,557 @@ document.addEventListener("mousedown", e=>{
   e.stopPropagation(); e.preventDefault();
   bpPulse(g.getAttribute("data-clk"));
 }, true);
+
+/* ===== 62. The sim page on big designs (lab 9: an 8-bit ALU on switches, a ÷50 000 scan for the display) =====
+   - A sheet with a clock divider gets the divider panel instead of the clock controls — and the
+     "⚡ เล่นเวลาจริง" button lived in those controls, so the one mode that runs such a design (the display
+     scans at 1 kHz, 50 000 clocks per step) was gone. The panel now carries it too.
+   - Clock by clock, a bus INPUT could only be 0 or 1 (one switch per input). Its bits now sit on the
+     switches its pin map gives (in_a[0] → SW0 …, else free switches in a row); flipping one changes that
+     bit from the clock on show onward, like any switch there. */
+
+/* ---- ⚡ on the divider panel ---- */
+{
+  const _bind=bindDividerPanel;
+  bindDividerPanel=function(div){
+    const r=_bind.apply(this, arguments);
+    try{
+      const S=SIM_SEQ, sch=(S && S.run) || activeSch(), msg=$("#simBoardMsg");
+      if(sch && msg && rtAvailable(sch) && !msg.querySelector('[data-act="rt-toggle"]')){
+        msg.insertAdjacentHTML("afterbegin", `<div class="seq-ctrl sb-rt"><span class="rt-ctl"><button class="btn2 rt-go" data-act="rt-toggle">⚡ เล่นเวลาจริง (50 MHz)</button>
+          <label class="muted">ช้ากว่าจริง <select id="rtSpeed"><option value="1">เร็วสุดเท่าที่ทำได้</option><option value="0.1">1/10</option><option value="0.01">1/100</option><option value="0.001" selected>1/1,000</option><option value="0.0001">1/10,000</option></select></label></span>
+          <span class="muted">— วงจรนี้มีตัวหารความถี่: จอ 7-seg / ไฟกระพริบจะเห็นจริงในโหมดนี้ · สวิตช์ทุกบิตและปุ่มกดใช้ได้ระหว่างเล่น</span></div>`);
+        const sp=document.getElementById("rtSpeed"); RT.speed=+sp.value; sp.onchange=()=>{ RT.speed=+sp.value; };
+      }
+    }catch(e){ console.warn("rt on divider panel", e); }
+    return r;
+  };
+}
+
+/* ---- bus inputs bit by bit on the clock-by-clock board ---- */
+function sbBusBits(S){
+  const sch=S.sch || S.run; if(!sch || !S.ids) return [];
+  const own=sch.pinmap||{}, pm=k=>(typeof pmGet==="function"?pmGet(own,k):own[k])||"";
+  const used=new Set(S.swOf.filter(x=>x!=null)), out=[];
+  S.inputs.forEach((name,k)=>{
+    const c=sch.components.find(x=>x.id===S.ids[k]); const w=c ? Math.max(1,(c.params&&c.params.width)||1) : 1;
+    if(w<2) return;
+    if(S.swOf[k]!=null) used.delete(S.swOf[k]);           // the one switch it was given: not a bit of it
+    const bits=[];
+    for(let i=0;i<w && i<16;i++){ const t=pm(`${name}[${i}]`); if(/^sw:\d+$/.test(t)){ bits.push({bit:i, sw:+t.slice(3)}); used.add(+t.slice(3)); } }
+    out.push({k, name, w, bits});
+  });
+  // a bus with no pins of its own: consecutive free switches, bit 0 on the lowest
+  out.filter(b=>!b.bits.length).forEach(b=>{ for(let i=0;i<b.w;i++){ let s=0; while(used.has(s)) s++; if(s>15) break; used.add(s); b.bits.push({bit:i, sw:s}); } });
+  return out;
+}
+{
+  const _wire=wireSimBoardSeq;
+  wireSimBoardSeq=function(j, opts){
+    const r=_wire.apply(this, arguments);
+    try{
+      const S=SIM_SEQ; if(!S || !S.hist) return r;
+      S.busBits=sbBusBits(S);
+      S.busBits.forEach(b=>{ S.swOf[b.k]=null;
+        b.bits.forEach(x=>{ const u=document.querySelector('#simPcb .swUnit[data-sw="'+x.sw+'"]');
+          if(u){ u.classList.add("mapped"); const nm=u.querySelector(".swName"); if(nm) nm.textContent=`${b.name}[${x.bit}]`; } }); });
+      if(S.busBits.length){
+        try{ seqShow(S.idx); }catch(_){}
+        const sig=$("#simSignals");
+        if(sig) sig.querySelectorAll("span").forEach(sp=>{ if(/ป้อนได้แค่ 0\/1/.test(sp.textContent)) sp.innerHTML=
+          "บัส "+S.busBits.map(b=>esc(b.name)).join(", ")+" อยู่บนสวิตช์ทีละบิตแล้ว (ตามหน้าเลือกขา) · วงจรที่มีตัวหารความถี่ ใช้ ⚡ เล่นเวลาจริง เพื่อดูจอ / ไฟกระพริบ"; });
+      }
+    }catch(e){ console.warn("bus switches", e); }
+    return r;
+  };
+  const _toggle=seqToggle;
+  seqToggle=function(sw){
+    const S=SIM_SEQ;
+    const b=S && S.hist && (S.busBits||[]).find(x=>x.bits.some(y=>y.sw===sw));
+    if(!b) return _toggle.apply(this, arguments);
+    const bit=b.bits.find(y=>y.sw===sw).bit, cur=+S.hist[S.idx][b.k]||0, on=(cur>>>bit)&1;
+    for(let i=S.idx;i<S.hist.length;i++){ const v=+S.hist[i][b.k]||0; S.hist[i][b.k]=on ? (v & ~(1<<bit)) : (v | (1<<bit)); }
+    if(seqResim(S.hist.length)) seqShow(S.idx);
+  };
+  const _show=seqShow;
+  seqShow=function(i){
+    const r=_show.apply(this, arguments);
+    const S=SIM_SEQ; if(!S || !S.busBits || !S.busBits.length) return r;
+    const row=S.rows[S.idx]; if(!row) return r;
+    S.busBits.forEach(b=>{ const v=+row[1][b.k]||0;
+      b.bits.forEach(x=>{ const u=document.querySelector('#simPcb .swUnit[data-sw="'+x.sw+'"]'), th=u&&u.querySelector(".swThumb"); if(!th) return;
+        const on=(v>>>x.bit)&1; th.style.top=on?"1px":"12px"; th.style.background=on?"#222":"#aaa"; }); });
+    return r;
+  };
+}
+
+/* ===== 63. Reordering a block's pins (Inspector ▸ เรียงขาโมดูล) carries the parent sheets along ==========
+   The symbol's pins moved, but on every sheet that places the block the wires kept their old routes and the
+   IN/OUT tags stayed where they were — a → c, b → a … crossed. Now, for each placed copy, the tags that hang
+   on one pin each (the net joins only that pin and the tag) swap places in the new pin order, and the wires
+   on that side of the block are routed again. Called from the core's reorderSubPins, before its snapshot. */
+function uxPinsFollow(sub, dir, oldOrder){
+  Object.values(state.project.schematics).forEach(sch=>{
+    if(sch===sub) return;
+    sch.components.filter(b=>subSchOf(b)===sub).forEach(blk=>{
+      const pins=getPorts(blk).filter(p=>p.dir===dir);
+      const tagOf=pid=>{
+        const w=sch.wires.find(x=>(x.from.cid===blk.id && x.from.pid===pid) || (x.to.cid===blk.id && x.to.pid===pid)); if(!w) return null;
+        const ends=new Map();
+        netWires(sch, w).forEach(id=>{ const x=sch.wires.find(y=>y.id===id); if(!x) return;
+          [x.from, x.to].forEach(ep=>{ const c=comp(ep.cid, sch); if(c && c.type!=="JUNCTION") ends.set(ep.cid+"."+ep.pid, c); }); });
+        if(ends.size!==2) return null;
+        const t=[...ends.values()].find(c=>c.id!==blk.id);
+        return t && (t.type==="IN" || t.type==="OUT") ? t : null;
+      };
+      // only the pins that changed place (and their tags) move; the rest keep their routes
+      const moved=new Set(pins.map(p=>p.id).filter((id,i)=>!oldOrder || oldOrder[i]!==id));
+      const pairs=pins.filter(p=>moved.has(p.id)).map(p=>({pid:p.id, tag:tagOf(p.id)})).filter(x=>x.tag);
+      if(pairs.length>1){
+        const slots=pairs.map(x=>({x:x.tag.x, y:x.tag.y})).sort((a,b)=>a.y-b.y || a.x-b.x);
+        pairs.forEach((x,i)=>{ x.tag.x=slots[i].x; x.tag.y=slots[i].y; });   // pins are listed in their new order
+      }
+      const ids=new Set();
+      pins.filter(p=>moved.has(p.id)).forEach(p=>sch.wires.filter(x=>(x.from.cid===blk.id && x.from.pid===p.id) || (x.to.cid===blk.id && x.to.pid===p.id))
+        .forEach(w=>netWires(sch, w).forEach(id=>ids.add(id))));
+      if(ids.size && typeof wtReroute==="function") wtReroute(sch, ids);
+    });
+  });
+}
+
+/* ===== 64. The part / module library as a window (Tools ▸ คลังชิ้นส่วนและโมดูล), not a side tab =========
+   The Modules tab squeezed 50 parts and the user's modules into a 240 px column, under groups that made little
+   sense (debounce under "เก็บข้อมูล"). Now: a big window, categories on the left (regrouped by what a part is
+   FOR), cards on the right, one search over everything. The user's own modules sit in the category they pick
+   when saving (or "กองกลาง" — not sorted), or in a category of their own; the project's VHDL blocks have one.
+   The Modules tab is gone; #modulesPane stays (hidden) so older code that renders it still works. */
+const LIB_CATS=[
+  {id:"arith", icon:"±", label:"บวก / ลบ / คูณ", kinds:["half_adder","full_adder","adder","half_subtractor","full_subtractor","subtractor","addsub","multiplier"]},
+  {id:"alu", icon:"ƒ", label:"ALU", kinds:["alu_slice","alu"]},
+  {id:"cmp", icon:"≷", label:"เปรียบเทียบ / ตรวจสอบ", kinds:["cmp_slice","comparator","bcd2_compare","bcd_valid","parity","majority"]},
+  {id:"sel", icon:"⇶", label:"MUX / DEMUX / Decoder / Encoder", kinds:["mux","mux_bus","demux","decoder","encoder"]},
+  {id:"conv", icon:"⇄", label:"แปลงรหัส", kinds:["bin2bcd","add3","tc_decode","bcd_ascii"]},
+  {id:"seg", icon:"8", label:"จอ 7-segment", kinds:["bcd_7seg","hex_7seg","char_7seg","seg7_mux4","text_scroll"]},
+  {id:"led", icon:"◉", label:"ไฟ LED / PWM", kinds:["led_pattern","pwm"]},
+  {id:"ff", icon:"▤", label:"Flip-flop / Register", kinds:["toggle","register","register_en","shift_register"]},
+  {id:"cnt", icon:"↻", label:"ตัวนับ", kinds:["binary_counter","mod_counter","bcd_counter","counter_digit","bcd_counter_multi","seq_counter","jk_counter"]},
+  {id:"clk", icon:"÷", label:"นาฬิกา / หารความถี่", kinds:["clock_divider","divider_chain"]},
+  {id:"btn", icon:"⊓", label:"ปุ่มกด / ขอบสัญญาณ", kinds:["debounce","one_pulse","edge_detector"]},
+  {id:"lab", icon:"◈", label:"ระบบทั้งแลป", kinds:["lab6_counter","lab7_countdown"]},
+];
+const LIB_COMMON="กองกลาง";
+const LIB={cat:"all", q:""};
+/* the parts take the new groups (the agent's list_parts and the old pane read P.group) */
+function libRegroup(){
+  const seen=new Set();
+  LIB_CATS.forEach(c=>c.kinds.forEach(k=>{ if(PARTS[k]){ PARTS[k].group=c.label; seen.add(k); } }));
+  Object.entries(PARTS).forEach(([k,P])=>{ if(!seen.has(k)) P.group=P.group||"อื่นๆ"; });
+}
+libRegroup();
+function libPartCat(k){ const c=LIB_CATS.find(c=>c.kinds.includes(k)); return c ? c.id : "other"; }
+function libModCat(m){ const c=String(m.cat||"").trim(); if(!c || c===LIB_COMMON) return "mine";
+  const b=LIB_CATS.find(x=>x.label===c || x.id===c); return b ? b.id : "u:"+c; }
+function libCustomCats(){ loadModules(); return [...new Set(Object.values(state.modules||{}).map(libModCat).filter(c=>c.startsWith("u:")))].sort(); }
+function libVhdlBlocks(){ return Object.values(state.project.customs||{}).filter(cc=>typeof cc.vhdl==="string" && !cc.schematic); }
+function libHit(text){ const q=LIB.q.trim().toLowerCase(); return !q || q.split(/\s+/).every(w=>text.toLowerCase().includes(w)); }
+
+/* ---- the items of a category (or all, or the search) ---- */
+function libItems(cat){
+  loadModules();
+  const parts=Object.entries(PARTS).filter(([k,P])=>(cat==="all" || libPartCat(k)===cat) && libHit(k+" "+P.label+" "+P.desc+" "+P.group))
+    .map(([k,P])=>({kind:"part", k, P}));
+  const mods=Object.values(state.modules||{}).filter(m=>(cat==="all" || libModCat(m)===cat) && (!LIB.q.trim() || moduleMatch(m, LIB.q.trim())))
+    .sort((a,b)=>(b.ts||0)-(a.ts||0)).map(m=>({kind:"mod", m}));
+  const vhb=(cat==="all" || cat==="vhdl") ? libVhdlBlocks().filter(cc=>libHit(cc.name+" vhdl "+(cc.ports||[]).map(p=>p.name).join(" "))).map(cc=>({kind:"vhdl", cc})) : [];
+  return mods.concat(parts, vhb);
+}
+function libCatList(){
+  const n=c=>libItems(c).length;
+  const L=LIB_CATS.map(c=>({id:c.id, icon:c.icon, label:c.label}));
+  L.push({sep:true});
+  L.push({id:"mine", icon:"▣", label:"โมดูลของฉัน — "+LIB_COMMON});
+  libCustomCats().forEach(c=>L.push({id:c, icon:"▢", label:c.slice(2)}));
+  L.push({id:"vhdl", icon:"‹›", label:"บล็อก VHDL ในโปรเจกต์นี้"});
+  return [{id:"all", icon:"▦", label:"ทั้งหมด"}].concat(L).map(x=>x.sep ? x : Object.assign(x, {n:n(x.id)}));
+}
+/* the part's pins at the form's starting settings: "Input: a[3:0], b[3:0], cin · Output: s[3:0], cout" */
+function libPortsHtml(k){
+  try{ const P=PARTS[k], d={}; Object.entries(P.params||{}).forEach(([n,s])=>d[n]=s.uiDef!==undefined?s.uiDef:s.def);
+    const pp=P.ports(partParams(k, d)), fmt=o=>Object.entries(o).filter(([,w])=>w>0).map(([b,w])=>w>1?`${b}[${w-1}:0]`:b).join(", ");
+    return `<div class="lib-io"><div><b>Input:</b> ${esc(fmt(pp.in))||"—"}</div><div><b>Output:</b> ${esc(fmt(pp.out))||"—"}</div></div>`; }
+  catch(_){ return ""; }
+}
+function libCardHtml(it){
+  if(it.kind==="part"){ const P=it.P;
+    return `<div class="lib-card part" data-libpart="${esc(it.k)}" title="${esc(P.desc)}">
+      <div class="lib-ct"><b>${esc(P.label)}</b> <span class="pt-badge ok" title="จำลองเทียบโมเดลอ้างอิงทุกครั้งที่สร้าง">✓ ตรวจทุกครั้ง</span></div>
+      <div class="lib-cd">${esc(P.desc)}</div>
+      ${libPortsHtml(it.k)}${LIB.q?`<div class="lib-grp muted">${esc(P.group)}</div>`:""}</div>`; }
+  if(it.kind==="vhdl"){ const cc=it.cc;
+    return `<div class="lib-card"><div class="lib-ct"><b>${esc(cc.name)}</b> <span class="pt-badge">VHDL</span></div>
+      <div class="lib-cd">${esc((cc.ports||[]).map(p=>p.width>1?`${p.name}[${p.width-1}:0]`:p.name).join(", "))}</div>
+      <div class="lib-ca"><button class="btn btn-primary" data-vhb="place" data-n="${escA(cc.name)}">วางบนแผ่นนี้</button><button class="btn" data-vhb="edit" data-n="${escA(cc.name)}">แก้โค้ด</button></div></div>`; }
+  const m=it.m;
+  const ok=m.verified && !/^not verified/.test(m.verified);
+  let old=0; try{ old=moduleInstances(m).filter(x=>x.outdated && x.projectId===state.activeProjectId).length; }catch(_){}
+  const cat=libModCat(m), catName=cat==="mine" ? LIB_COMMON : cat.startsWith("u:") ? cat.slice(2) : (LIB_CATS.find(c=>c.id===cat)||{}).label;
+  return `<div class="lib-card mod">
+    <div class="lib-row"><div class="mod-thumb">${thumbnailSvg(m.schematic)}</div><div style="min-width:0;flex:1">
+      <div class="lib-ct"><b>${esc(m.name)}</b> <span class="pt-badge ${ok?"ok":""}" title="${esc(m.verified||"ยังไม่ได้ตรวจเทียบกับข้อกำหนด")}">${ok?"✓ ตรวจแล้ว":"ยังไม่ได้ตรวจ"}</span> <span class="pt-badge">v${m.version||1}</span> <span class="pt-badge mine">ของฉัน</span></div>
+      <div class="lib-cd">${esc(m.desc||"— ไม่มีคำอธิบาย —")}</div>
+      <div class="mod-io">${modIoSummary(m.schematic)}${LIB.q?` · ${esc(catName)}`:""}</div></div></div>
+    <div class="lib-ca"><button class="btn btn-primary" data-libuse="${esc(m.id)}" title="วางเป็นบล็อกบนแผ่นที่เปิดอยู่">วางเป็นบล็อก</button>
+      <button class="btn" data-libopen="${esc(m.id)}" title="เปิดเป็นแผ่นใหม่ในโปรเจกต์นี้ (แก้ไขได้)">เปิดเป็นแผ่น</button>
+      ${old?`<button class="btn" data-modupd="${esc(m.id)}" title="แผ่นในโปรเจกต์นี้ยังเป็นเวอร์ชันเก่า">อัปเดต ${old}</button>`:""}
+      <button class="btn" data-libedit="${esc(m.id)}" title="แก้ชื่อ / คำอธิบาย / หมวด">✎</button>
+      <button class="btn" data-libdel="${esc(m.id)}" title="ลบออกจากคลัง">🗑</button></div></div>`;
+}
+function libRender(win){
+  win=win||document.querySelector(".lib-win"); if(!win) return;
+  const cats=libCatList();
+  if(LIB.cat!=="all" && !cats.some(c=>c.id===LIB.cat)) LIB.cat="all";
+  win.querySelector(".lib-side").innerHTML=cats.map(c=>c.sep?`<div class="lib-sep">ของฉัน</div>`:
+    `<button class="lib-cat ${c.id===LIB.cat?"on":""}" data-libcat="${esc(c.id)}"><span class="ic">${c.icon}</span><span class="lb">${esc(c.label)}</span><span class="n">${c.n}</span></button>`).join("");
+  // a search looks through every category
+  const cur=cats.find(c=>c.id===LIB.cat)||cats[0], items=libItems(LIB.q.trim() ? "all" : LIB.cat);
+  const empty=LIB.cat==="vhdl" ? `ยังไม่มีบล็อก VHDL ในโปรเจกต์นี้ — เขียนโค้ดสำหรับส่วนที่วาดเป็นเกตยาก (นับทีละ 3, ตาราง ROM, FSM)`
+    : LIB.q ? `ไม่พบ “${esc(LIB.q)}”` : `ยังไม่มีโมดูลในหมวดนี้ — เปิดแผ่นที่ต้องการ แล้วกด “＋ เก็บแผ่นที่เปิดอยู่เข้าคลัง” เลือกหมวดนี้`;
+  // "ทั้งหมด": a section per category, in the sidebar's order
+  const body=LIB.cat==="all" && !LIB.q.trim()
+    ? cats.filter(c=>!c.sep && c.id!=="all" && c.n).map(c=>`<div class="lib-sh" data-libcat="${esc(c.id)}"><span class="ic">${c.icon}</span> ${esc(c.label)} <span class="muted">${c.n}</span></div>
+        <div class="lib-grid">${libItems(c.id).map(libCardHtml).join("")}</div>`).join("")
+    : `<div class="lib-grid">${items.length?items.map(libCardHtml).join(""):`<div class="muted lib-empty">${empty}</div>`}</div>`;
+  win.querySelector(".lib-main").innerHTML=`<div class="lib-mh"><b><span class="ic">${cur.icon}</span> ${esc(LIB.q?`ผลค้นหา “${LIB.q}”`:cur.label)}</b>
+      ${LIB.cat==="vhdl"?`<button class="btn" data-vhb="new">＋ บล็อก VHDL ใหม่</button>`:""}</div>`+body;
+}
+function openLibrary(cat){
+  if(cat) LIB.cat=cat;
+  libRegroup();                                   // parts added by later files (65) take their category too
+  document.querySelectorAll(".lib-bg").forEach(x=>x.close());
+  const m=uxModal("คลังชิ้นส่วนและโมดูล", `<div class="lib-win">
+      <div class="lib-top"><input class="mod-search" id="libSearch" type="search" autocomplete="off" spellcheck="false" placeholder="🔍 ค้นหา (ชื่อ / คำอธิบาย / ชื่อขา) — เช่น 7-seg, หาร, mux" value="${esc(LIB.q)}">
+        <button class="btn btn-primary" id="libSave">＋ เก็บแผ่นที่เปิดอยู่เข้าคลัง</button></div>
+      <div class="lib-body"><div class="lib-side"></div><div class="lib-main"></div></div>
+      <div class="muted lib-foot">ชิ้นส่วนสำเร็จรูปถูกสร้างด้วยโปรแกรมและจำลองเทียบโมเดลอ้างอิงทุกครั้ง · โมดูลของฉันเก็บในเครื่องนี้ ใช้ได้ทุกโปรเจกต์</div></div>`, {width:1080});
+  m.classList.add("lib-bg");
+  const win=m.querySelector(".lib-win");
+  libRender(win);
+  const si=m.querySelector("#libSearch");
+  si.addEventListener("input", ()=>{ LIB.q=si.value; libRender(win); });
+  m.querySelector("#libSave").onclick=()=>libSaveDialog(LIB.cat);
+  m.addEventListener("click", ev=>{
+    const t=ev.target.closest("button, .lib-card, .lib-sh"); if(!t) return;
+    const d=t.dataset;
+    if(d.libcat){ LIB.cat=d.libcat; LIB.q=""; si.value=""; libRender(win); return; }
+    if(d.libpart){ partDialog(d.libpart, {onDone:()=>m.close()}); return; }
+    if(d.libuse){ m.close(); moduleUse(d.libuse); return; }
+    if(d.libopen){ m.close(); moduleOpen(d.libopen); return; }
+    if(d.libedit){ libSaveDialog(null, d.libedit); return; }
+    if(d.libdel){ moduleDelete(d.libdel); return; }
+    if(d.vhb==="place" || d.vhb==="new" || d.vhb==="edit") setTimeout(()=>{ if(d.vhb==="place") m.close(); }, 0);
+  });
+  setTimeout(()=>si.focus(), 30);
+  return m;
+}
+/* save the open sheet (or edit a module): name, description, category — a built-in one, กองกลาง, or a new one */
+function libSaveDialog(cat, editId){
+  loadModules();
+  const m0=editId ? state.modules[editId] : null, sch=activeSch();
+  if(!m0 && (!sch || !(sch.components||[]).length)){ toast("แผ่นที่เปิดอยู่ยังไม่มีวงจร","warn"); return; }
+  const curCat=m0 ? (libModCat(m0)==="mine" ? LIB_COMMON : libModCat(m0).startsWith("u:") ? libModCat(m0).slice(2) : (LIB_CATS.find(c=>c.id===libModCat(m0))||{}).label)
+    : cat && cat!=="all" && cat!=="vhdl" ? (cat==="mine" ? LIB_COMMON : cat.startsWith("u:") ? cat.slice(2) : (LIB_CATS.find(c=>c.id===cat)||{}).label) : LIB_COMMON;
+  const opts=[LIB_COMMON].concat(LIB_CATS.map(c=>c.label), libCustomCats().map(c=>c.slice(2)));
+  const dlg=uxModal(m0 ? "แก้โมดูล “"+esc(m0.name)+"”" : "เก็บแผ่น “"+esc(sch.name)+"” เข้าคลัง", `
+    <div class="row"><label>ชื่อโมดูล</label><input id="lsName" value="${esc(m0?m0.name:sch.name||"module")}" spellcheck="false"></div>
+    <div class="row"><label>คำอธิบาย</label><input id="lsDesc" value="${esc(m0?m0.desc||"":"")}" placeholder="ไม่ใส่ก็ได้"></div>
+    <div class="row"><label>หมวด</label><select id="lsCat">${opts.map(o=>`<option ${o===curCat?"selected":""}>${esc(o)}</option>`).join("")}<option value="__new">＋ หมวดใหม่…</option></select></div>
+    <div class="row" id="lsNewRow" style="display:none"><label>ชื่อหมวดใหม่</label><input id="lsNew" placeholder="เช่น งานโปรเจกต์จบ"></div>
+    <div class="muted" style="font-size:11.5px">${LIB_COMMON} = ไม่จัดหมวด · หมวดสำเร็จรูป (เช่น ตัวนับ) = แสดงคู่กับชิ้นส่วนสำเร็จรูปของหมวดนั้น${m0?"":" · บล็อกย่อยที่แผ่นนี้ใช้ถูกเก็บไปด้วย"}</div>`,
+    {width:480, foot:`<button class="btn btn-primary" id="lsOk">${m0?"บันทึก":"เก็บเข้าคลัง"}</button>`});
+  const sel=dlg.querySelector("#lsCat");
+  sel.onchange=()=>{ dlg.querySelector("#lsNewRow").style.display=sel.value==="__new"?"":"none"; };
+  dlg.querySelector("#lsOk").onclick=()=>{
+    const name=dlg.querySelector("#lsName").value.trim(), desc=dlg.querySelector("#lsDesc").value.trim();
+    let c=sel.value==="__new" ? dlg.querySelector("#lsNew").value.trim() : sel.value;
+    if(!name){ toast("ใส่ชื่อโมดูล","warn"); return; }
+    if(sel.value==="__new" && !c){ toast("ใส่ชื่อหมวดใหม่","warn"); return; }
+    const b=LIB_CATS.find(x=>x.label===c); if(c===LIB_COMMON) c="";
+    let m;
+    if(m0){ m=m0; m.name=name; m.desc=desc; }
+    else {
+      const same=moduleFind(name);
+      if(same && !confirm(`มีโมดูลชื่อ “${same.name}” อยู่แล้ว — เขียนทับ (เป็นเวอร์ชันใหม่)?`)) return;
+      m=moduleSave(sch, name, desc, same?same.id:null);
+      // the same stamp save_module (MCP) gives: verified only when the sheet passed a real check
+      try{ m.verified=sheetVerified(sch) ? sch.verified.how : "not verified (saved from the library window)"; }catch(_){}
+    }
+    if(c) m.cat=b?b.id:c; else delete m.cat;
+    saveModules(); dlg.close();
+    try{ renderModulesPane(); }catch(_){}
+    LIB.cat=libModCat(m); libRender();
+    toast(`${m0?"บันทึก":"เก็บ"}โมดูล “${m.name}” ${c?"ในหมวด "+c:"ไว้ใน"+LIB_COMMON}แล้ว`+(!m0 && m.deps && m.deps.length?` (รวมบล็อกย่อย ${m.deps.length} แผ่น)`:""),"ok",4000);
+  };
+}
+/* the old entry points open the window / the save form */
+moduleImportCurrent=function(){ libSaveDialog(LIB.cat); };
+moduleEditDesc=function(id){ libSaveDialog(null, id); };
+{
+  // whatever re-renders the old pane (a save over MCP, a delete, a new VHDL block) refreshes the window too
+  const _pane=renderModulesPane;
+  renderModulesPane=function(){ const r=_pane.apply(this, arguments); try{ libRender(); }catch(_){} return r; };
+}
+/* MCP: the category is listed, and can be set */
+{
+  const _info=mcpModuleInfo;
+  mcpModuleInfo=function(m){ const r=_info.apply(this, arguments);
+    const c=libModCat(m); r.category=c==="mine" ? LIB_COMMON : c.startsWith("u:") ? c.slice(2) : (LIB_CATS.find(x=>x.id===c)||{}).label; return r; };
+}
+MCP_OPS.set_module_category = a=>{
+  const m=mcpModule(a.module), c=String(a.category||"").trim();
+  const b=LIB_CATS.find(x=>x.label===c || x.id===c);
+  if(!c || c===LIB_COMMON) delete m.cat; else m.cat=b ? b.id : c;
+  saveModules(); libRender();
+  return {module:m.name, category:mcpModuleInfo(m).category, categories:[LIB_COMMON].concat(LIB_CATS.map(x=>x.label))};
+};
+/* the side tab goes; the window is the first item of Tools ▸ ตัวสร้างวงจร */
+{
+  const tab=document.querySelector('.pane-tabs button[data-ltab="modules"]'); if(tab) tab.style.display="none";
+  const box=[...document.querySelectorAll('#menu .dd-head')].find(h=>/ตัวสร้างวงจร/.test(h.textContent));
+  if(box && !document.querySelector('#menu [data-gen="library"]')){
+    box.insertAdjacentHTML("afterend", `<button class="gen-mi lib-mi" data-gen="library" title="ชิ้นส่วนสำเร็จรูปที่ตรวจแล้ว แบ่งหมวด + โมดูลของฉัน"><span class="gi">▦</span><b>คลังชิ้นส่วนและโมดูล…</b></button>`);
+    document.querySelector('#menu [data-gen="library"]').addEventListener("click", ()=>openLibrary());
+  }
+  GENERATORS.unshift({id:"library", icon:"▦", name:"คลังชิ้นส่วนและโมดูล", desc:"ชิ้นส่วนสำเร็จรูป (ตัวบวก ตัวนับ 7-seg …) แบ่งหมวด และโมดูลของฉัน", run:()=>openLibrary()});
+}
+
+/* ===== 65. Parts drawn the way a person would split them ===========================================
+   From the user's review of the library:
+   - ÷5000 drew one 12-bit counter. A big N now splits into stages of ≤ 10 (5000 = ÷5 → ÷10 → ÷10 → ÷10,
+     odd stages first so the last one gives 50 % duty): part `divider_chain`, and the divider form / Tools ▸
+     หารความถี่ use it for N > 16 when N factors that way.
+   - parts that have a natural cell are built from blocks of that cell (`blocks`): the N-bit adder from
+     half / full adders, the subtractor from half / full subtractors, the comparator from 1-bit cascade cells
+     (`cmp_slice`, like the 7485), and a new array multiplier from AND rows + adder blocks.
+   - counter_digit (and the multi-digit counters made of it) can use the flip-flops' asynchronous reset /
+     preset (`async`): clr goes to every rst pin, the count runs as a plain binary up/down counter and the
+     first state past the end (m when counting up, all ones when counting down) resets / presets it at once —
+     the textbook "reset at N" counter, a third of the gates of the synchronous one.
+   The form (24) starts `blocks` / `async` ON (`uiDef`); over MCP / the agent they default OFF, so what the
+   in-app model was trained on stays the same. */
+
+/* the new on/off settings (quiet) are left out of a part's params while off: build_part answers, sheet names
+   (ptSub) and the agent's view stay exactly as before */
+{
+  const _pp=partParams;
+  partParams=function(kind){ const p=_pp.apply(this, arguments), P=PARTS[kind];
+    Object.entries((P&&P.params)||{}).forEach(([k,s])=>{ if(s.quiet && p[k]===s.def) delete p[k]; }); return p; };
+}
+/* ---- ÷N as a chain of small dividers ---- */
+function divFactors(n, max){
+  max=max||10; n=Math.floor(+n); if(!(n>=2)) return null;
+  const pr=[]; let x=n;
+  for(let f=2; f*f<=x; f++) while(x%f===0){ pr.push(f); x/=f; }
+  if(x>1) pr.push(x);
+  if(pr.some(f=>f>max)) return null;
+  // pair 2 × 5 into 10s, pack the rest first-fit decreasing into stages ≤ max
+  const c2=pr.filter(f=>f===2).length, c5=pr.filter(f=>f===5).length, tens=Math.min(c2, c5);
+  const R=[...Array(c2-tens).fill(2), ...Array(c5-tens).fill(5), ...pr.filter(f=>f!==2 && f!==5)].sort((a,b)=>b-a);
+  const bins=[];
+  R.forEach(f=>{ const b=bins.find(b=>b.v*f<=max); if(b) b.v*=f; else bins.push({v:f}); });
+  const st=bins.map(b=>b.v).concat(Array(tens).fill(10));
+  // odd stages first, then the even ones, the 10s last: the output stage is even → 50 % duty
+  return st.sort((a,b)=>((a%2===0)-(b%2===0)) || ((a===10)-(b===10)) || (a-b));
+}
+function divStagesOf(p){
+  const t=String(p.stages||"").trim();
+  if(!t) return divFactors(p.n) || [p.n];
+  const L=(t.match(/\d+/g)||[]).map(Number);
+  return L;
+}
+function divChainCheck(v){
+  const t=String(v||"").trim(); if(!t) return null;
+  const L=(t.match(/\d+/g)||[]).map(Number);
+  if(!L.length) return "write the stages as numbers, e.g. 5,10,10,10";
+  if(L.some(x=>x<2)) return "every stage divides by 2 or more";
+  return null;
+}
+/* the ripple chain, clock by clock: a stage moves when the one before it rises */
+function divChainStep(stages, S){
+  const outs=S.map((s,k)=>sysDivStep(stages[k], s).out);
+  const nx=S.slice();
+  for(let k=0;k<stages.length;k++){
+    const o=sysDivStep(stages[k], nx[k]); nx[k]={c:o.c, t:o.t};
+    const now=sysDivStep(stages[k], nx[k]).out;
+    if(!(now===1 && outs[k]===0)) break;            // no rising edge → the next stage does not move
+  }
+  return {out:outs[outs.length-1], state:nx};
+}
+Object.assign(PARTS, {
+  divider_chain:{ label:"หารความถี่ ÷N แบบหลายขั้น", group:"นาฬิกา / หารความถี่",
+    desc:"N ใหญ่ (เช่น 5000 = ÷5 → ÷10 → ÷10 → ÷10) แบ่งเป็นตัวหารเล็กต่อกันเป็นทอด ๆ ให้อัตโนมัติ — วงจรเล็กและอ่านง่ายกว่าตัวนับใหญ่ตัวเดียว · stages = กำหนดเองได้ (ผลคูณต้องเท่ากับ N) · ขั้นสุดท้ายเป็นเลขคู่ = duty 50%",
+    params:{n:{min:2,max:2147483648,def:5000}, stages:{text:true, def:"", check:divChainCheck}},
+    ports:()=>({in:{clk_in:1}, out:{clk_out:1}}),
+    plan:p=>{ const L=divStagesOf(p); if(!L || L.reduce((a,b)=>a*b,1)!==p.n) return `แบ่ง ${L?L.join(" × "):"?"} ≠ ${p.n}`;
+      return L.length>1 ? `÷${p.n} = ${L.map(x=>"÷"+x).join(" → ")} (${L.length} ขั้น)` : `÷${p.n} แบ่งเป็นตัวหาร ≤ 10 ไม่ได้ (มีตัวประกอบเฉพาะ > 10) — ทำเป็นขั้นเดียว`; },
+    build:p=>{ const L=divStagesOf(p);
+      if(L.reduce((a,b)=>a*b,1)!==p.n) throw new Error(`stages ${L.join("×")} = ${L.reduce((a,b)=>a*b,1)}, not ${p.n}`);
+      const t=ptIntent("div"+p.n), clk=t.IN("clk_in"); let prev=clk;
+      L.forEach(f=>{ const b=ptBlock(t, ptSub("clock_divider", {n:f})); t.W(prev, b+".clk_in"); prev=b+".clk_out"; });
+      t.OUT("clk_out", prev); return t; },
+    // ≤ 64: the chain itself, clock by clock; bigger: the same generator on its first and last stage
+    seq:p=>{ const L=divStagesOf(p), P=L.reduce((a,b)=>a*b,1);
+      if(P>64){ const f=L.length>1?[L[0], L[L.length-1]]:[p.n%2?63:62];
+        if(f.length===1) return {small:{n:f[0], stages:""}};
+        let sm=f; if(sm[0]*sm[1]>64) sm=[sm[0]%2?3:2, sm[1]%2?5:10];
+        return {small:{n:sm[0]*sm[1], stages:sm.join(",")}}; }
+      return {cycles:Math.min(3*P+4, 200), init:L.map(()=>({c:0,t:0})), drive:()=>({}), step:s=>divChainStep(L, s)}; } },
+
+  cmp_slice:{ label:"ตัวเปรียบเทียบ 1 บิต (ต่อเป็นทอด)", group:"เปรียบเทียบ / ตรวจสอบ",
+    desc:"เทียบ a กับ b หนึ่งบิต ต่อจากบิตที่สูงกว่า: gt = gt_in + eq_in·a·b' · lt = lt_in + eq_in·a'·b · eq = eq_in·(a⊙b) — บิตสูงสุดใส่ gt_in = 0, eq_in = 1, lt_in = 0 (แบบ 7485)",
+    ports:()=>({in:{a:1, b:1, gt_in:1, eq_in:1, lt_in:1}, out:{gt:1, eq:1, lt:1}}),
+    ref:v=>({gt:v.gt_in|(v.eq_in&v.a&(1-v.b)), lt:v.lt_in|(v.eq_in&(1-v.a)&v.b), eq:v.eq_in&(v.a===v.b?1:0)}),
+    build:()=>{ const t=ptIntent("cmp_slice"), a=t.IN("a"), b=t.IN("b"), gi=t.IN("gt_in"), ei=t.IN("eq_in"), li=t.IN("lt_in");
+      t.OUT("gt", t.G("OR",[gi, t.G("AND",[ei, a, t.G("NOT",[b])])]));
+      t.OUT("eq", t.G("AND",[ei, t.G("XNOR",[a, b])]));
+      t.OUT("lt", t.G("OR",[li, t.G("AND",[ei, t.G("NOT",[a]), b])])); return t; } },
+
+  multiplier:{ label:"ตัวคูณ n × m บิต (array multiplier)", group:"บวก / ลบ / คูณ",
+    desc:"p = a × b · ผลคูณย่อย a·bᵢ ด้วย AND แล้วบวกทีละแถวด้วยตัวบวก (บล็อก) แบบในตำรา · n, m = 1..4 บิต → p มี n + m บิต",
+    params:{n:{min:1,max:4,def:4}, m:{min:1,max:4,def:4}},
+    ports:p=>({in:{a:p.n, b:p.m}, out:{p:p.n+p.m}}),
+    ref:(v,p)=>({p:v.a*v.b}),
+    build:p=>{ const t=ptIntent(`mult${p.n}x${p.m}`), A=[], B=[];
+      for(let i=p.n-1;i>=0;i--) A[i]=t.IN("a"+i);
+      for(let i=p.m-1;i>=0;i--) B[i]=t.IN("b"+i);
+      const pp=i=>A.map(a=>t.G("AND",[a, B[i]]));
+      let acc=pp(0);                                   // bits 0 … n−1 of the running sum
+      const add=p.n>1 ? ptSub("adder", {n:p.n, cin:false, blocks:true}) : null;
+      for(let i=1;i<p.m;i++){
+        const row=pp(i);
+        if(!add){ acc[i]=row[0]; continue; }             // 1 × m bits: each product bit is one AND
+        const b=ptBlock(t, add);
+        for(let j=0;j<p.n;j++){ t.W(acc[i+j]!=null ? acc[i+j] : t.X("GND"), b+".a"+j); t.W(row[j], b+".b"+j); }
+        for(let j=0;j<p.n;j++) acc[i+j]=b+".s"+j;
+        acc[i+p.n]=b+".cout";
+      }
+      for(let k=0;k<p.n+p.m;k++) t.OUT("p"+k, acc[k]!=null ? acc[k] : t.X("GND"));
+      return t; } },
+});
+
+/* ---- built from blocks: adder, subtractor, comparator ---- */
+{
+  const addBlocks=(kind, fn)=>{
+    const P=PARTS[kind], _b=P.build;
+    P.params=Object.assign({}, P.params, {blocks:{bool:true, def:false, uiDef:true, quiet:true}});
+    P.build=p=>p.blocks && p.n>1 ? fn(p) : _b(p);
+  };
+  addBlocks("adder", p=>{ const t=ptIntent("adder"+p.n), A=[], B=[];
+    for(let i=p.n-1;i>=0;i--){ A[i]=t.IN("a"+i); B[i]=t.IN("b"+i); }
+    let c=p.cin ? t.IN("cin") : null;
+    const fa=ptSub("full_adder");
+    for(let i=0;i<p.n;i++){
+      if(c==null){ const h=ptBlock(t, ptSub("half_adder")); t.W(A[i], h+".a"); t.W(B[i], h+".b"); t.OUT("s"+i, h+".sum"); c=h+".carry"; continue; }
+      const b=ptBlock(t, fa); t.W(A[i], b+".a"); t.W(B[i], b+".b"); t.W(c, b+".cin"); t.OUT("s"+i, b+".sum"); c=b+".cout"; }
+    t.OUT("cout", c); return t; });
+  addBlocks("subtractor", p=>{ const t=ptIntent("subtractor"+p.n), A=[], B=[];
+    for(let i=p.n-1;i>=0;i--){ A[i]=t.IN("a"+i); B[i]=t.IN("b"+i); }
+    const hs=ptBlock(t, ptSub("half_subtractor")); t.W(A[0], hs+".a"); t.W(B[0], hs+".b"); t.OUT("d0", hs+".diff");
+    let c=hs+".borrow"; const fs=ptSub("full_subtractor");
+    for(let i=1;i<p.n;i++){ const b=ptBlock(t, fs); t.W(A[i], b+".a"); t.W(B[i], b+".b"); t.W(c, b+".bin"); t.OUT("d"+i, b+".diff"); c=b+".bout"; }
+    t.OUT("bout", c); return t; });
+  addBlocks("comparator", p=>{ const t=ptIntent("comparator"+p.n), A=[], B=[];
+    for(let i=p.n-1;i>=0;i--){ A[i]=t.IN("a"+i); B[i]=t.IN("b"+i); }
+    const cs=ptSub("cmp_slice");
+    let g=t.X("GND"), e=t.X("VCC"), l=t.X("GND");
+    for(let i=p.n-1;i>=0;i--){ const b=ptBlock(t, cs);           // from the top bit down, like the 7485 cascade
+      t.W(A[i], b+".a"); t.W(B[i], b+".b"); t.W(g, b+".gt_in"); t.W(e, b+".eq_in"); t.W(l, b+".lt_in");
+      g=b+".gt"; e=b+".eq"; l=b+".lt"; }
+    t.OUT("eq", e); t.OUT("gt", g); t.OUT("lt", l); return t; });
+}
+
+/* ---- counter_digit with the flip-flops' asynchronous reset / preset ---- */
+function cdAsyncBuild(p){
+  const w=ptLen(p.m-1), t=ptIntent((p.down?"down":"up")+"_digit_m"+p.m+"_async"), clk=t.IN("clk"), en=t.IN("en"), clr=t.IN("clr");
+  const ld=p.load?t.IN("load"):null, D=p.load?Array.from({length:w},(_,i)=>t.IN("d"+i)):null;
+  const full=p.m===(1<<w), T=p.down ? (1<<w)-1 : p.m;           // the first state past the end (momentary)
+  const target=p.down ? p.m-1 : 0, presetBits=full ? [] : Array.from({length:w},(_,i)=>i).filter(i=>(target>>i)&1);
+  const F=Array.from({length:w},(_,i)=>t.X("DFF",{params:{reset:true, preset:presetBits.includes(i)}}));
+  F.forEach(f=>t.W(clk, f+".clk"));
+  const qv=F.map(f=>({p:f+".q", n:f+".qn"}));
+  // plain binary up / down count while en: bit i toggles when every lower bit is 1 (up) / 0 (down)
+  let carry=en;
+  for(let i=0;i<w;i++){
+    const nx=t.G("XOR",[qv[i].p, carry]);
+    if(i<w-1) carry=t.G("AND",[carry, p.down?qv[i].n:qv[i].p]);
+    let d=nx; if(ld){ const m=t.X("MUX",{params:{inputs:2}}); t.W(nx, m+".d0"); t.W(D[i], m+".d1"); t.W(ld, m+".s0"); d=m+".y"; }
+    t.W(d, F[i]+".d"); t.OUT("q"+i, F[i]+".q");
+  }
+  // reset (and, counting down, preset) the moment the count leaves the range
+  let rst=clr;
+  if(!full){
+    const reach=new Set([...Array(p.m).keys(), T]);
+    const hit=ptSop(t, qv, [T], ptMin(w, s=>!reach.has(s)));
+    rst=t.G("OR",[clr, hit]);
+    presetBits.forEach(i=>t.W(hit, F[i]+".pre"));
+  }
+  F.forEach((f,i)=>t.W(presetBits.includes(i) ? clr : rst, f+".rst"));
+  const term=p.down?0:p.m-1;
+  const atEnd=ptSop(t, qv, [term], ptMin(w, s=>s>=p.m && s!==T));
+  t.OUT("tc", t.G("AND",[atEnd, en]));
+  t.layout="ffstack";                                // drawn like the lab sheet (50), flip-flops in one column
+  return t;
+}
+{
+  const P=PARTS.counter_digit, _b=P.build, _s=P.seq;
+  P.params=Object.assign({}, P.params, {async:{bool:true, def:false, uiDef:true, quiet:true}});
+  P.desc=P.desc.replace("(ทั้งคู่ synchronous)", "(synchronous; async:true = clr ต่อเข้าขา reset ของ flip-flop ตรง ๆ และวนกลับด้วย async reset/preset — วงจรเล็กลง)");
+  P.build=p=>p.async ? cdAsyncBuild(p) : _b(p);
+  // async clr: the count shows 0 in the same clock clr is 1, and stays 0 while it is held
+  P.seq=p=>{ const S=_s(p); if(!p.async) return S;
+    const st=S.step;
+    return Object.assign({}, S, {step:(s,v)=>{ if(v.clr) return {out:{q:0, tc:v.en&&(p.down?0:p.m-1)===0?1:0}, state:0}; return st(s,v); }}); };
+  const M=PARTS.bcd_counter_multi, _mb=M.build, _ms=M.seq;
+  M.params=Object.assign({}, M.params, {async:{bool:true, def:false, uiDef:true, quiet:true}});
+  M.build=p=>{ if(!p.async) return _mb(p);
+    const keep=ptSub; let it;
+    // the same drawing, with async digits
+    ptSub=(kind, a)=>keep(kind, kind==="counter_digit" ? Object.assign({}, a, {async:true}) : a);
+    try{ it=_mb(p); } finally { ptSub=keep; }
+    it.module=(it.module||"counter")+"_async"; return it; };
+  M.seq=p=>{ const S=_ms(p); if(!p.async) return S;
+    const F=CNT_FORMATS[p.format], st=S.step;
+    return Object.assign({}, S, {step:(s,v)=>{ if(!v.clr) return st(s,v);
+      const out={carry:0}; F.names.forEach(n=>out[n]=0);
+      out.carry=v.en && (p.down?0:F.mods.reduce((a,b)=>a*b,1)-1)===0 ? 1 : 0; return {out, state:0}; }}); };
+}
+
+/* ---- the divider form and Tools ▸ หารความถี่: a big N is split ---- */
+PARTS.clock_divider.ui={
+  extra:`<label class="pt-f"><input type="checkbox" data-pp="_split" checked> แบ่งเป็นหลายขั้นอัตโนมัติเมื่อ N > 16 (เช่น 5000 = ÷5 → ÷10 → ÷10 → ÷10)</label>`,
+  swap:a=>{ const sp=a._split; delete a._split;
+    const L=divFactors(a.n); if(!sp || !(a.n>16) || !L || L.length<2) return a;
+    return Object.assign({}, a, {kind:"divider_chain"}); } };
+{
+  const g=GENERATORS.find(x=>x.id==="clkdiv");
+  if(g){
+    g.run=async()=>{
+      const v=await uxAsk("หารความถี่ด้วย N",[
+        {label:"หารด้วย (N)",type:"number",value:2500000,min:2,hint:"50 MHz → 1 Hz = 50000000 · → 20 Hz = 2500000 · N > 16 แบ่งเป็นตัวหารเล็กต่อกันให้อัตโนมัติ"},
+        {label:"ขาออก",value:"clk_out"}]);
+      if(!v) return;
+      const n=Math.floor(+v[0]), out=sanId(String(v[1]||"clk_out").trim()||"clk_out"), L=divFactors(n);
+      if(!(n>16) || !L || L.length<2 || out!=="clk_out"){
+        const r=dividerIntent(n, {out});
+        if(r.error){ toast("สร้างไม่ได้: "+r.error,"err"); return; }
+        const dr=uxDrawGenerated(r, "หารความถี่ ÷"+r.module.slice(3));
+        if(dr){ try{ zoomFit(); }catch(_){} toast(r.note+(n>16 && !L?" · N นี้มีตัวประกอบเฉพาะ > 10 จึงแบ่งเป็นขั้นไม่ได้":""),"info",8000); }
+        return; }
+      try{ const r=MCP_OPS.build_part({kind:"divider_chain", n});
+        toast(`สร้าง ÷${n} = ${L.map(x=>"÷"+x).join(" → ")} ในแผ่น ${r.sheet} แล้ว — ตรวจแล้ว: ${r.verified.method}`,"ok",7000); }
+      catch(e){ toast("สร้างไม่ได้: "+e.message,"err",6000); }
+    };
+  }
+}
 
 </script>
 <!-- UX-LAYER:END -->
