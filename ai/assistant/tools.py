@@ -37,6 +37,11 @@ SCHEMAS = [
             "query": {"type": "string", "description": "หน้าที่ที่ต้องการ เช่น 'ตัวนับ BCD', 'หารความถี่', '7-segment หลายหลัก', 'debounce ปุ่ม'"}},
             "required": ["query"]}}},
     {"type": "function", "function": {
+        "name": "board_info",
+        "description": "ข้อเท็จจริงของบอร์ด EDGE Spartan-7 ที่แน่นอน: ขั้วสัญญาณ (active-low/high) ของ 7-segment, an, ปุ่ม, LED, "
+                       "ขา clock, ตำแหน่งปุ่ม pb0–pb4 และปุ่มตามใบงานแลป — ใช้ก่อนตอบเรื่องขาหรือขั้วสัญญาณของบอร์ดทุกครั้ง",
+        "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {
         "name": "app_help",
         "description": "วิธีใช้โปรแกรม FPGA Ecosystem / Schematic Studio (เมนู ขั้นตอน เลือกขา จำลอง ลงบอร์ด FSM spec รายงาน)",
         "parameters": {"type": "object", "properties": {
@@ -44,6 +49,48 @@ SCHEMAS = [
             "required": ["topic"]}}},
 ]
 NAMES = {s["function"]["name"] for s in SCHEMAS}
+
+# from ai/board/edge_spartan7.xdc and the lab sheets (pin presets in editor/ux/41-board-fix.js). In the test run
+# Qwen3.5 9B answered "an is active-high" with only lab notes in front of it, against its own system prompt:
+# a board question now gets this card first, as a tool result.
+BOARD_FACTS = """ข้อเท็จจริงบอร์ด EDGE Spartan-7 (XC7S15) — ยืนยันจากไฟล์ขาของบอร์ด ใช้ตามนี้เท่านั้น:
+- I/O 3.3 V (LVCMOS33) ไม่ใช่ 5 V · clock 50 MHz ที่ขา H11
+- จอ 7-segment 4 หลัก แบบ common anode:
+  · ขา a–g และ dp เป็น active-low: ส่ง 0 = ส่วนนั้นติด, 1 = ดับ
+  · ขาเลือกหลัก an[3:0] เป็น active-low ด้วย: an(i) = 0 = เปิดหลัก i, 1 = ปิด (เช่น เปิดหลัก 0 อย่างเดียว: an = "1110")
+  · แสดงหลายหลักต้องสแกน (time-multiplexing) ทีละหลักเร็วพอให้ตาเห็นติดพร้อมกัน (ราว 1 kHz ต่อรอบสแกน หรือ ≥ 60 Hz ต่อหลัก)
+  · ในคลังมี seg7_mux4 / seg7_num ที่ทำทั้งถอดรหัสและสแกนให้แล้ว
+- ปุ่มกด pb[0]–pb[4] active-high (กด = 1, มี PULLDOWN): pb0 = บน (J13), pb1 = ล่าง (L13), pb2 = ซ้าย (J14), pb3 = ขวา (J11), pb4 = กลาง (J12)
+  ปุ่มเด้ง (bounce) ต้องผ่าน debounce / one_pulse ก่อนใช้นับครั้งที่กด
+- สวิตช์เลื่อน SW0–SW15: ขึ้น = 1 · LED 0–15: 1 = ติด
+- ปุ่มตามใบงาน: แลป 6 ปุ่ม START/STOP = pb4 (กลาง) · แลป 7 SET = pb2 (ซ้าย), START/STOP = pb0 (บน), RESET = pb4 (กลาง),
+  เวลาเริ่มต้นจาก SW[15:0], LED0 = error, LED1 = time-up
+- จอ LCD 16×2 (HD44780), ADC MCP3208 (SPI), UART, buzzer มีบนบอร์ด — ขาดูได้ในหน้าเลือกขาของโปรแกรม"""
+
+# a Thai question finds English notes too ("แลป 7" → Lab7: the lab sheets are indexed as Lab7-2569)
+_EXPAND = [(r"แลป\s*(\d+)", lambda m: f"Lab{m.group(1)} lab {m.group(1)}"), (r"7\s*-?\s*seg|เจ็ดส่วน", lambda m: "7-segment seg an"),
+           (r"ปุ่ม", lambda m: "push button pb"), (r"สวิตช์", lambda m: "switch SW"), (r"หารความถี่", lambda m: "frequency divider"),
+           (r"ตัวนับ", lambda m: "counter"), (r"นับถอยหลัง", lambda m: "countdown"), (r"ไฟ\s*led|แอลอีดี", lambda m: "LED")]
+
+
+def expand_query(q: str) -> str:
+    extra = []
+    for pat, rep in _EXPAND:
+        for m in re.finditer(pat, q, re.I):
+            extra.append(rep(m))
+    return q + (" " + " ".join(dict.fromkeys(extra)) if extra else "")
+
+
+# the functions a question asks for → the library category each one lives in: find_parts keeps the best part
+# of every category the question names (a 00–99 button counter on the 7-seg got counters + buttons only and the
+# model then said the library has no 7-seg part)
+_NEEDS = [(r"7\s*-?\s*seg|เจ็ดส่วน|segment|ตัวเลขบนจอ", "จอ 7-segment"), (r"นับ|counter", "ตัวนับ"),
+          (r"ปุ่ม|button|กดปุ่ม|debounce|เด้ง|ขอบ", "ปุ่มกด / ขอบสัญญาณ"), (r"หารความถี่|divider|\bhz\b|วินาที|นาที|นาฬิกา", "นาฬิกา / หารความถี่"),
+          (r"บวก|ลบ|คูณ|หาร(?!ความถี่)|adder|subtract|multipl", "บวก / ลบ / คูณ / หาร"), (r"\bled\b|ไฟวิ่ง|pwm", "ไฟ LED / PWM"),
+          (r"lcd|adc|uart|buzzer|เสียง|แสง|ldr", "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)"), (r"mux|demux|decoder|encoder|ถอดรหัส", "MUX / DEMUX / Decoder / Encoder"),
+          (r"bcd|แปลงรหัส|binary|ฐานสิบ", "แปลงรหัส"), (r"เปรียบเทียบ|compar|มากกว่า|น้อยกว่า", "เปรียบเทียบ / ตรวจสอบ"),
+          (r"register|shift|เลื่อนบิต|flip.?flop", "Flip-flop / Register"), (r"\balu\b", "ALU"), (r"fsm|state|สถานะ", "เครื่องมือออกแบบ")]
+_BOARD_Q = re.compile(r"(บอร์ด|board|edge|7\s*-?\s*seg|เจ็ดส่วน|\ban\b|ขาไหน|ปุ่มไหน|ปุ่ม\s*(set|start|stop|reset)|active.?(low|high)|ติด|ดับ|\bpb\d?|\bsw\d|led)", re.I)
 
 # A question about the program, its library or a lab is looked up BY THE APP first, with the whole question
 # as the query, and handed to the model as if it had made that call (it may still search more). Left to
@@ -54,15 +101,33 @@ _APP_Q = re.compile(r"(โปรแกรม|แอป|เมนู|หน้า
 _COURSE_Q = re.compile(r"(แลป|ใบงาน|\blab\b|บอร์ด|ขาไหน|\bpin\b|edge)", re.I)
 
 
+def lab_sheet(n: str):
+    """Lab n's sheet (ai/rag/labs/Lab<n>-*.json) as one hit: title, objectives, what each item asks."""
+    labs = HERE.parent / "rag" / "labs"
+    f = next((p for p in sorted(labs.glob("Lab*.json")) if re.fullmatch(rf"Lab_?{int(n)}[-_].*", p.stem, re.I)), None)
+    if not f:
+        return None
+    try:
+        d = json.loads(f.read_text("utf-8"))
+    except Exception:
+        return None
+    items = " · ".join(re.sub(r"\s+", " ", str(it.get("question") or ""))[:450] for it in (d.get("items") or [])[:3])
+    text = f"วัตถุประสงค์: {'; '.join(d.get('objectives') or [])} · งาน: {items}"
+    return {"title": d.get("title") or f.stem, "topic": f"ใบงานแลป {int(n)}: {d.get('title') or ''}", "source": f.stem + ".pdf",
+            "group": "labs", "text": text}
+
+
 def prefetch(question: str) -> list:
     """[(tool, args)] the app runs before the model's first round (none for a general question)."""
     q = (question or "").strip()[:300]
     out = []
+    if _BOARD_Q.search(q):
+        out.append(("board_info", {}))
     if _PARTS_Q.search(q):
         out.append(("find_parts", {"query": q}))
     if _APP_Q.search(q):
         out.append(("app_help", {"topic": q}))
-    if _COURSE_Q.search(q) and not out:
+    if _COURSE_Q.search(q) and not any(n in ("find_parts", "app_help") for n, _ in out):
         out.append(("search_course", {"query": q}))
     return out
 
@@ -119,12 +184,19 @@ class Toolbox:
                 return self.find_parts(str(args.get("query") or ""))
             if name == "app_help":
                 return self.app_help(str(args.get("topic") or args.get("query") or ""))
+            if name == "board_info":
+                return BOARD_FACTS
             return f"ไม่มีเครื่องมือชื่อ {name} — ใช้ได้: " + ", ".join(sorted(NAMES))
         except Exception as e:
             return f"เครื่องมือ {name} ผิดพลาด: {type(e).__name__}: {e}"
 
     def search_course(self, query: str, sources: list) -> str:
-        hits = (self.rag(query, COURSE_K) if self.rag else []) or []
+        hits = (self.rag(expand_query(query), COURSE_K) if self.rag else []) or []
+        lab = re.search(r"(?:แลป|lab)\s*(\d+)", query, re.I)
+        sheet = lab_sheet(lab.group(1)) if lab else None
+        if sheet:
+            # a question about one lab: its sheet first, read from the file (the index ranked "แลป 7" as Lab9)
+            hits = [sheet] + [h for h in hits if sheet["source"].split("-")[0].lower() not in (h.get("source") or "").lower()][:COURSE_K - 1]
         if not hits:
             return "ไม่พบเนื้อหาวิชาที่ตรง — ตอบจากความรู้ที่แน่ใจ หรือบอกว่าไม่แน่ใจ"
         rows = []
@@ -141,8 +213,18 @@ class Toolbox:
 
     def find_parts(self, query: str) -> str:
         q = _grams(query)
-        ranked = sorted(self.catalog(), key=lambda r: _score(q, " ".join(
-            str(r.get(k) or "") for k in ("kind", "label", "category", "description"))), reverse=True)[:PARTS_K]
+        score = lambda r: _score(q, " ".join(str(r.get(k) or "") for k in ("kind", "label", "category", "description")))
+        rows = [r for r in self.catalog() if r["kind"] != "library"]     # (the library window itself)
+        ranked = sorted(rows, key=score, reverse=True)[:PARTS_K]
+        # every function the question names gets its category's best part, if the ranking left it out
+        for pat, cat in _NEEDS:
+            if re.search(pat, query, re.I):
+                # the category's own best match for the function's words (not for the whole question)
+                fq = _grams(" ".join(m.group(0) for m in re.finditer(pat, query, re.I)) + " " + cat)
+                best = max((r for r in rows if r.get("category") == cat), default=None,
+                           key=lambda r: _score(fq, " ".join(str(r.get(k) or "") for k in ("kind", "label", "description"))))
+                if best is not None and best not in ranked:
+                    ranked.append(best)
         if not ranked:
             return "คลังชิ้นส่วนยังไม่ถูกสร้าง (catalog.json)"
         out = []

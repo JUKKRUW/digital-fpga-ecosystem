@@ -435,6 +435,7 @@ function drawMem(j){
 const memApi = body => api("/api/assistant/memories", body).then(drawMem).catch(() => {});
 $("#memOn").onchange = e => memApi({enabled: e.target.checked});
 $("#memAdd").onclick = () => { const v = $("#memNew").value.trim(); if(v){ $("#memNew").value = ""; memApi({action:"add", text:v}); } };
+$("#memNew").addEventListener("keydown", e => { if(e.key === "Enter" && !e.isComposing){ e.preventDefault(); $("#memAdd").click(); } });
 $("#memClear").onclick = () => { if(confirm("ลบทุกอย่างที่ AI จำไว้?")) memApi({action:"clear"}); };
 $("#memList").addEventListener("click", e => {
   const r = e.target.closest("[data-mid]"); if(!r) return; const id = +r.dataset.mid;

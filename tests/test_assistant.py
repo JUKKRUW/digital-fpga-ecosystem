@@ -330,6 +330,17 @@ class Tools(unittest.TestCase):
         self.assertEqual([n for n, _ in AT.prefetch("ทำนาฬิกาต้องใช้อะไรในคลังบ้าง")], ["find_parts"])
         self.assertEqual([n for n, _ in AT.prefetch("เลือกขาในโปรแกรมยังไง")], ["app_help"])
         self.assertEqual(AT.prefetch("latch กับ flip-flop ต่างกันยังไง"), [])
+        self.assertEqual([n for n, _ in AT.prefetch("7-seg บนบอร์ดต้องส่ง 0 หรือ 1 ถึงติด")], ["board_info", "search_course"])
+        self.assertIn("an(i) = 0 = เปิดหลัก i", t.call("board_info", {}, []))
+        # every function the question names is covered: a 7-seg part although the counters rank first
+        kinds = t.find_parts("ตัวนับ 00-99 แสดงบน 7-seg กดปุ่มนับ ใช้อะไรในคลัง")
+        self.assertTrue(any(k in kinds for k in ("seg7_mux4", "seg7_num", "bcd_7seg")))
+        self.assertNotIn("- library —", kinds)
+        # a lab number reads that lab's sheet (the index ranked "แลป 7" as Lab9)
+        src = []
+        self.assertIn("ใบงานแลป 7", t.search_course("แลป 7 ให้ทำอะไร", src))
+        self.assertEqual(src[0]["source"], "Lab7-2569.pdf")
+        self.assertIn("Lab7", AT.expand_query("แลป 7 ปุ่ม SET"))
 
     def test_proxy_runs_the_calls(self):
         import urllib.request
