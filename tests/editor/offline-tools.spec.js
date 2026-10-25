@@ -14,7 +14,9 @@ test("demo half adder simulates in the browser", async ({ page }) => {
 test("truth table tool builds a correct XOR", async ({ page }) => {
   await openEditor(page);
   await page.click('[data-menu="tools"]');
-  await page.click("#menu [data-gen=tt]");
+  await page.click('#menu [data-gen="library"]');           // the generators are cards in the library window
+  await page.click('.lib-cat[data-libcat="tools"]');
+  await page.click('.lib-card[data-libtool="tt"]');
   await page.locator(".tt-c").nth(1).click();
   await page.locator(".tt-c").nth(2).click();
   await expect(page.locator("#ttExpr")).toContainText("y = a'·b + a·b'");
