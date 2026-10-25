@@ -177,8 +177,8 @@
 .mcp-approval{position:fixed;right:18px;bottom:18px;z-index:9000;width:min(440px,calc(100vw - 36px));background:var(--bg-2);border:1px solid var(--accent);border-radius:12px;box-shadow:0 10px 32px rgba(0,0,0,.25);padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--ink)}
 .mcp-approval .mcp-ap-h{font-weight:700;display:flex;align-items:center;gap:7px}
 .mcp-approval .mcp-ap-h .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:uxPulse 1.6s ease-in-out infinite}
-.mcp-approval .mcp-ap-body{max-height:40vh;overflow:auto;line-height:1.55;background:var(--bg-3,var(--bg));border-radius:8px;padding:8px 10px;white-space:normal}
-.mcp-approval textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;resize:vertical}
+.mcp-approval .mcp-ap-body{max-height:40vh;overflow:auto;line-height:1.55;background:var(--bg-3);border-radius:8px;padding:8px 10px;white-space:normal}
+.mcp-approval textarea{font:inherit;color:inherit;background:var(--bg-0);border:1px solid var(--line);border-radius:8px;padding:6px 8px;resize:vertical}
 .mcp-approval .mcp-ap-row{display:flex;gap:8px;align-items:center}
 .mcp-approval .grow{flex:1}
 
@@ -312,7 +312,7 @@
 #simPcb .pbtn.pb-down{background:#ffd !important}
 #simPcb .pbtn .pb-name{position:absolute;top:33px;left:50%;transform:translateX(-50%);font-size:8px;color:#2f81f7;white-space:nowrap;pointer-events:none;font-weight:600}
 /* 57: VHDL blocks */
-.vhb-text{width:100%;height:420px;font:12.5px/1.45 ui-monospace,Consolas,monospace;background:var(--bg2,#0f1117);color:var(--ink,#e6e6e6);border:1px solid var(--line,#333);border-radius:6px;padding:8px;resize:vertical;tab-size:2;white-space:pre}
+.vhb-text{width:100%;height:420px;font:12.5px/1.45 ui-monospace,Consolas,monospace;background:var(--bg-0);color:var(--ink);border:1px solid var(--line,#333);border-radius:6px;padding:8px;resize:vertical;tab-size:2;white-space:pre}
 .vhb-status{margin-top:6px;font-size:12px;min-height:18px}
 .vhb-status.ok{color:var(--ok,#3fb950)} .vhb-status.bad{color:var(--err,#f85149)}
 .vhb-sec .pt-h{display:flex;align-items:center;gap:8px} .vhb-new{margin-left:auto;font-size:11px}
@@ -321,9 +321,14 @@
 /* 18: 👍 / 👎 under an agent answer */
 .ag-rate{display:flex;gap:6px;align-items:center;margin:-2px 0 8px 4px;font-size:12px;color:var(--muted,#888)}
 .ag-rate button{border:1px solid transparent;background:none;cursor:pointer;font-size:14px;padding:1px 6px;border-radius:6px;opacity:.55}
-.ag-rate button:hover{opacity:1;border-color:var(--border,#ccc)}
+.ag-rate button:hover{opacity:1;border-color:var(--line-2)}
 .ag-rate button.on{opacity:1;border-color:var(--accent,#4a7)}
 
 /* 58: lock a sheet against the agent */
 .tree-item .sr-lock{margin-left:auto;font-size:11px;opacity:0;cursor:pointer;padding:0 4px}
 .tree-item:hover .sr-lock,.tree-item .sr-lock.on{opacity:.75}
+/* 61: one clock edge by hand on the live sim */
+#canvas .bp-clk{cursor:pointer}
+#canvas .bp-clk rect{fill:var(--bg-1);stroke:var(--accent);stroke-width:1}
+#canvas .bp-clk text{font-size:10px;fill:var(--accent);font-weight:700;pointer-events:none}
+#canvas .bp-clk:hover rect{fill:var(--accent)} #canvas .bp-clk:hover text{fill:var(--bg-0)}
