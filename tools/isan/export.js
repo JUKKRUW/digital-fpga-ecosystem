@@ -56,6 +56,8 @@ const PLAN = [
   ["vhdl", "bin2dec", cross({ digits: R(1, 5) })], ["vhdl", "seg7_num", cross({ blank: [true, false] })],
   ["vhdl", "lcd16x2", [["FPGA EDGE", "VALUE: ####"], ["LAB 8 LDR", "LIGHT: ####"], ["HELLO", "WORLD"], ["COUNT", "#####"], ["TEMP", "## C"], ["VOLT", "#.### V"], ["SCORE", "###"], ["CE KMITL", "DIGITAL SYSTEM"]]
     .map(([line1, line2]) => ({ line1, line2 }))],
+  ["vhdl", "lcd_scroll", [["HELLO FROM FPGA EDGE SPARTAN-7", "FPGA EDGE"], ["WELCOME TO CE KMITL", "DIGITAL SYSTEM"], ["DIGITAL SYSTEM LAB", "VALUE: ####"], ["HELLO", "WORLD"], ["LAB 8 LDR SENSOR", "LIGHT: ####"], ["GOOD LUCK ON THE EXAM", "SCORE: ###"]]
+    .flatMap(([text, other]) => cross({ row: [1, 2], right: [false, true], ms: [150, 300, 500] }).map(o => Object.assign({ text, other }, o)))],
   ["vhdl", "adc_mcp3208", cross({ ch: R(0, 7) })], ["vhdl", "uart_tx", cross({ baud: [9600, 19200, 57600, 115200] })],
   ["vhdl", "tone", [262, 294, 330, 349, 392, 440, 494, 523, 1000, 2000].map(f => ({ f }))],
 ];

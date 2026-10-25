@@ -25657,6 +25657,114 @@ end rtl;
 `; },
     pins:()=>{ const m={clk:"clk", lcd_rs:"lcd:rs", lcd_e:"lcd:e"}; for(let i=0;i<8;i++) m[`lcd_data[${i}]`]="lcd:d"+i; return m; } },
 
+  lcd_scroll:{ label:"จอ LCD 16×2: ข้อความเลื่อน (VHDL)", cat:"dev", desc:"ข้อความยาวได้ถึง 48 ตัววิ่งผ่านบรรทัดหนึ่งของจอ LCD (เลื่อนซ้ายหรือขวา ตั้งความเร็วได้) อีกบรรทัดอยู่นิ่ง · ใส่ # ในบรรทัดนิ่ง = หลักของตัวเลขจากขา value",
+    params:{text:{label:"ข้อความที่เลื่อน", text:true, maxlen:48, def:"HELLO FROM FPGA EDGE SPARTAN-7"}, row:{label:"เลื่อนบรรทัดที่", options:[1,2], def:1},
+      right:{label:"เลื่อนไปทางขวา (ไม่ติ๊ก = ไปทางซ้าย)", bool:true, def:false}, ms:{label:"เลื่อน 1 ตัวทุก (ms)", min:50, max:2000, def:300},
+      other:{label:"อีกบรรทัด (นิ่ง, # = หลักตัวเลข)", text:true, def:"FPGA EDGE"}, clk_hz:{label:"clk (Hz)", min:1000, max:200000000, def:50000000}},
+    check:p=>{ if(!p.text.trim()) return "ใส่ข้อความที่จะเลื่อน";
+      if(p.text.length>48) return "ข้อความที่เลื่อนยาวได้ไม่เกิน 48 ตัว";
+      if(p.other.length>16) return "บรรทัดนิ่งยาวเกิน 16 ตัว";
+      for(const t of [p.text, p.other]) if(/[^\x20-\x7e]/.test(t)) return "จอ LCD แสดงได้แค่ตัวอังกฤษ ตัวเลข และเครื่องหมาย (ไม่มีภาษาไทย)";
+      if((p.other.match(/#/g)||[]).length>5) return "ใส่ # ได้ไม่เกิน 5 หลัก"; return null; },
+    name:p=>"lcd_scroll"+((p.other.match(/#/g)||[]).length?"_num":""), board:true,
+    // the loop on screen: the text, then spaces up to 16 (short text) or a 4-space gap (long text)
+    loop:p=>p.text.length<16 ? p.text.padEnd(16," ") : p.text+"    ",
+    frames:p=>Math.max(1, Math.round(p.ms/8.5)),                 // one frame = 34 writes × 250 us = 8.5 ms
+    plan:p=>{ const k=(p.other.match(/#/g)||[]).length, F=VLIB.lcd_scroll.frames(p);
+      return `เลื่อน 1 ตัวทุก ${F} รอบเขียนจอ ≈ ${(F*8.5).toFixed(1).replace(/\.0$/,"")} ms · วนครบ ${VLIB.lcd_scroll.loop(p).length} ตำแหน่ง`+(k?` · ขา value ${vlW(10**k-1)} บิต แสดงแทน # ${k} หลัก`:""); },
+    vhdl:(p,E)=>{
+      const S=VLIB.lcd_scroll.loop(p), L=S.length, F=p.frames||VLIB.lcd_scroll.frames(p), O=p.other.padEnd(16," ");
+      const nd=(O.match(/#/g)||[]).length, W=nd?vlW(10**nd-1):0;
+      const STEP=Math.max(4, Math.round(p.clk_hz/4000)), LONG=Math.max(4*STEP, Math.round(p.clk_hz/500)), EON=Math.max(1, Math.round(p.clk_hz/1e6)), CW=vlW(LONG);
+      // init (6 commands), then one frame: line 1 address + 16 chars, line 2 address + 16 chars
+      const seq=[[0,0x38],[0,0x38],[0,0x38],[0,0x0C],[0,0x01],[0,0x06]], pos=[]; let k=nd, B=0;
+      const line=(r)=>{ seq.push([0, r===1?0x80:0xC0]);
+        if(r===p.row){ B=seq.length; for(let i=0;i<16;i++) seq.push([1,0x20]); }
+        else [...O].forEach(ch=>{ if(ch==="#"){ pos.push({at:seq.length, pw:--k}); seq.push([1,0x30]); } else seq.push([1,ch.charCodeAt(0)]); }); };
+      line(1); line(2);
+      const LAST=seq.length-1, LOOP=6, IW=vlW(LAST), OW=vlW(L-1), FW=vlW(F-1);
+      const rom=seq.map(([rs,d])=>`"${rs}${vlBin(d,8)}"`).join(",\n      ");
+      const txt=[...S].map(ch=>`x"${ch.charCodeAt(0).toString(16).padStart(2,"0").toUpperCase()}"`).join(", ");
+      const esc1=t=>t.replace(/"/g,"'");
+      return VL_HEAD+`-- ${E}: จอ LCD 16x2 (HD44780, 8 บิต, R/W ต่อกราวด์บนบอร์ด) — ข้อความเลื่อน
+--   บรรทัด ${p.row} เลื่อนไปทาง${p.right?"ขวา":"ซ้าย"}: "${esc1(S)}" (วน ${L} ตำแหน่ง)
+--   บรรทัด ${3-p.row} นิ่ง: "${esc1(O)}"${nd?` (# = หลักของ value, หลักซ้าย = หลักสูง)`:""}
+--   เขียนทั้งจอซ้ำทุก 8.5 ms (1 ตัวทุก 250 us, E สูงช่วง 1–3 us), เลื่อน 1 ตัวทุก ${F} รอบ ≈ ${(F*8.5).toFixed(1)} ms
+--   คำสั่งเริ่มต้นเว้น 2 ms ต่อคำสั่ง (clear ใช้ 1.52 ms), รอเปิดเครื่อง 20 ms (clk = ${p.clk_hz} Hz)
+entity ${E} is
+  port ( clk      : in  std_logic;${nd?`\n         value    : in  std_logic_vector(${W-1} downto 0);`:""}
+         lcd_data : out std_logic_vector(7 downto 0);
+         lcd_rs   : out std_logic;
+         lcd_e    : out std_logic );
+end ${E};
+
+architecture rtl of ${E} is
+  type rom_t is array (0 to ${LAST}) of std_logic_vector(8 downto 0);
+  constant ROM : rom_t := (
+      ${rom});
+  type txt_t is array (0 to ${L-1}) of std_logic_vector(7 downto 0);
+  constant TXT : txt_t := (
+      ${txt});
+  signal cnt  : unsigned(${CW-1} downto 0) := (others => '0');
+  signal idx  : unsigned(${IW-1} downto 0) := (others => '0');
+  signal boot : unsigned(3 downto 0) := (others => '0');
+  signal off  : unsigned(${OW-1} downto 0) := (others => '0');
+  signal fr   : unsigned(${FW-1} downto 0) := (others => '0');
+  signal cur  : std_logic_vector(8 downto 0);${nd?`\n  signal n    : unsigned(${W-1} downto 0);`:""}
+begin
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if (idx < ${LOOP} and cnt = ${LONG-1}) or (idx >= ${LOOP} and cnt = ${STEP-1}) then
+        cnt <= (others => '0');
+        if boot < 10 then
+          boot <= boot + 1;
+        elsif idx = ${LAST} then
+          idx <= to_unsigned(${LOOP}, ${IW});
+          if fr = ${F-1} then
+            fr <= (others => '0');
+${p.right ? `            if off = 0 then
+              off <= to_unsigned(${L-1}, ${OW});
+            else
+              off <= off - 1;
+            end if;` : `            if off = ${L-1} then
+              off <= (others => '0');
+            else
+              off <= off + 1;
+            end if;`}
+          else
+            fr <= fr + 1;
+          end if;
+        else
+          idx <= idx + 1;
+        end if;
+      else
+        cnt <= cnt + 1;
+      end if;
+    end if;
+  end process;
+
+  cur    <= ROM(to_integer(idx));
+  lcd_rs <= cur(8);
+  lcd_e  <= '1' when boot = 10 and cnt >= ${EON} and cnt < ${3*EON} else '0';
+${nd?`  n <= unsigned(value);\n`:""}  process(idx, cur, off${nd?", n":""})
+    variable k : integer;
+  begin
+    if idx >= ${B} and idx < ${B+16} then
+      k := to_integer(off) + to_integer(idx) - ${B};
+      if k >= ${L} then
+        k := k - ${L};
+      end if;
+      lcd_data <= TXT(k);
+${pos.map(q=>`    elsif idx = ${q.at} then
+      lcd_data <= std_logic_vector(resize(${vlDigitsVhdl(0,q.pw,"n")}, 8) + 48);`).join("\n")}${pos.length?"\n":""}    else
+      lcd_data <= cur(7 downto 0);
+    end if;
+  end process;
+end rtl;
+`; },
+    pins:()=>{ const m={clk:"clk", lcd_rs:"lcd:rs", lcd_e:"lcd:e"}; for(let i=0;i<8;i++) m[`lcd_data[${i}]`]="lcd:d"+i; return m; } },
+
   adc_mcp3208:{ label:"อ่าน ADC MCP3208 (SPI) (VHDL)", cat:"dev", desc:"อ่านค่า 12 บิต (0–4095) จากช่อง ch ของ MCP3208 บนบอร์ด EDGE ซ้ำไปเรื่อย ๆ · done = 1 หนึ่ง clock ทุกครั้งที่ได้ค่าใหม่ · SCK 500 kHz — แลป 8 (LDR ช่อง 6)",
     params:{ch:{label:"ช่อง (0–7)", min:0, max:7, def:6}, clk_hz:{label:"clk (Hz)", min:2000000, max:200000000, def:50000000}},
     name:p=>"adc_mcp3208_ch"+p.ch, board:true,
@@ -25877,6 +25985,25 @@ const VL_SEQCHECK={
     const got=screen.map(r=>r.join(""));
     if(!inited || got[0]!==want[0] || got[1]!==want[1]) return {pass:false, why:`จอแสดง "${got[0]}" / "${got[1]}" ควรเป็น "${want[0]}" / "${want[1]}"`};
     return {pass:true, how:`ถอดสิ่งที่เขียนลงจอทุกขอบขาลงของ E: "${got[0]}" / "${got[1]}"${nd?` (value = ${value})`:""}`}; },
+  lcd_scroll:p=>{ const F=2, q=Object.assign({}, p, {clk_hz:16000, frames:F}), M=vhCompile(vlText("lcd_scroll", q, "chk"));
+    const S=VLIB.lcd_scroll.loop(p), L=S.length, nd=(p.other.match(/#/g)||[]).length, value=nd ? Math.min(10**nd-1, 1234 % 10**nd + 5) : 0;
+    const screen=[[..." ".repeat(16)],[..." ".repeat(16)]], frames=[]; let addr=0, lastE=0, inited=false;
+    const shifts=Math.min(L+2, 40), need=(shifts+1)*F+2;
+    let st=vhInitState(M);
+    st=vlRunClock(M, st, nd?{value}:{}, 40*10+6*40+(need+1)*34*4+50, s=>{ const e=vlOut(M,s,"lcd_e");
+      if(lastE===1 && e===0){ const rs=vlOut(M,s,"lcd_rs"), d=vlOut(M,s,"lcd_data");
+        if(rs===0){ if(d===0x01) inited=true; if(d===0x80) frames.push(screen.map(r=>r.join(""))); if(d&0x80) addr=d&0x7F; }
+        else { const row=addr>=0x40?1:0, col=addr&0x3F; if(col<16) screen[row][col]=String.fromCharCode(d); addr++; } }
+      lastE=e; return frames.length<need+1; });
+    if(!inited) return {pass:false, why:"ไม่ได้ส่งคำสั่ง clear ตอนเริ่ม"};
+    const full=frames.slice(1), sr=p.row-1;                  // frames[0] = the blank screen before the first frame
+    let k=nd; const still=p.other.padEnd(16," ").replace(/#/g,()=>String(Math.floor(value/10**(--k))%10));
+    for(let i=0;i<full.length;i++){
+      const o=Math.floor(i/F), off=p.right ? ((L-o%L)%L) : o%L, want=[...Array(16)].map((_,c)=>S[(off+c)%L]).join("");
+      if(full[i][sr]!==want) return {pass:false, why:`รอบที่ ${i+1}: บรรทัด ${p.row} แสดง "${full[i][sr]}" ควรเป็น "${want}"`};
+      if(full[i][1-sr]!==still) return {pass:false, why:`รอบที่ ${i+1}: บรรทัด ${3-p.row} แสดง "${full[i][1-sr]}" ควรเป็น "${still}"`}; }
+    if(full.length<shifts*F) return {pass:false, why:`เขียนจอครบแค่ ${full.length} รอบ`};
+    return {pass:true, how:`ถอดสิ่งที่เขียนลงจอทุกขอบขาลงของ E ${full.length} รอบ: เลื่อนไปทาง${p.right?"ขวา":"ซ้าย"}ทีละ 1 ตัวครบ ${shifts} ครั้ง${shifts>L?" (วนครบรอบ)":""} บรรทัดนิ่งถูกต้อง${nd?` (value = ${value})`:""}`}; },
   adc_mcp3208:p=>{ const q=Object.assign({}, p, {clk_hz:2000000}), M=vhCompile(vlText("adc_mcp3208", q, "chk"));
     const sample=[0x5A3, 0xFFF, 0x001, 0x800];
     let st=vhInitState(M), dout=0, rises=0, cmd=[], frame=0, lastSck=0, lastCs=1, got=[], bad=null;
@@ -25914,7 +26041,7 @@ function vlBuild(kind, a){
   const p=vlParams(kind, a||{}), C=state.project.customs=state.project.customs||{};
   let name=sanId(a&&a.name || L.name(p)), text=vlText(kind, p, name);
   for(let i=2; C[name] && C[name].vhdl!==text; i++){ name=sanId((a&&a.name||L.name(p))+"_"+i); text=vlText(kind, p, name); }
-  const v=vlVerify(kind, p, text);
+  let v; try{ v=vlVerify(kind, p, text); }catch(e){ v={pass:false, why:e.message}; }     // a run-time error in the check is a failed check
   if(!v.pass) throw new Error("ตรวจไม่ผ่าน: "+v.why);
   const r=vlBuildSave(text, name);
   C[r.name].description=L.label.replace(/ \(VHDL\)$/,"")+" — "+v.how;
@@ -25927,7 +26054,7 @@ function vlDialog(kind, opts){
   const L=VLIB[kind]; if(!L) return;
   const field=(k,s)=>{
     if(s.bool) return `<label class="pt-f"><input type="checkbox" data-vp="${k}" ${s.def?"checked":""}> ${esc(s.label)}</label>`;
-    if(s.text) return `<label class="pt-f">${esc(s.label)} <input type="text" data-vp="${k}" value="${esc(s.def)}" maxlength="16" spellcheck="false" style="width:190px;font-family:monospace"></label>`;
+    if(s.text) return `<label class="pt-f">${esc(s.label)} <input type="text" data-vp="${k}" value="${esc(s.def)}" maxlength="${s.maxlen||16}" spellcheck="false" style="width:${s.maxlen>16?300:190}px;font-family:monospace"></label>`;
     if(s.options) return `<label class="pt-f">${esc(s.label)} <select data-vp="${k}">${s.options.map(o=>`<option ${o===s.def?"selected":""}>${o}</option>`).join("")}</select></label>`;
     return `<label class="pt-f">${esc(s.label)} <input type="number" data-vp="${k}" value="${s.def}" min="${s.min}" max="${s.max}" style="width:${s.max>1e6?120:70}px"></label>`; };
   const m=uxModal(esc(L.label), `
