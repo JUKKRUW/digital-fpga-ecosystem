@@ -628,8 +628,15 @@ def assistant_ui_start(port: int) -> None:
     def touch():        # llama-ui open = the app is in use (the watchdog quits after IDLE_SECONDS without)
         global LAST_PING
         LAST_PING = time.time()
+    from assistant import compact as ACP
+    count, n_ctx = ACP.server_hooks(up)
+    summarize = lambda sys_, text: assistant_backend().complete(
+        [{"role": "system", "content": sys_}, {"role": "user", "content": text}],
+        think=False, temperature=0.3, max_tokens=ACP.SUMMARY_TOKENS, timeout=300)["text"]
+    _ASSIST["compact"] = ACP.Compactor(summarize, count, n_ctx)
     _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch,
-                                         lambda name, args, sources: assistant_toolbox().call(name, args, sources)), port)
+                                         lambda name, args, sources: assistant_toolbox().call(name, args, sources),
+                                         _ASSIST["compact"].apply), port)
 
 
 def assistant_ui_url() -> str:

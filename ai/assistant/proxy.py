@@ -55,12 +55,13 @@ def sources_line(sources) -> str:
 class Hooks:
     """What the launcher plugs in. augment(question) -> {"system", "prefix", "sources"}; after(question, answer);
     touch() on every request (the launcher quits when no window of it is open: this window counts)."""
-    def __init__(self, upstream, augment, after=None, touch=None, call_tool=None):
+    def __init__(self, upstream, augment, after=None, touch=None, call_tool=None, compact=None):
         self.upstream = upstream        # () -> "http://127.0.0.1:8080"
         self.augment = augment          # may return "tools" (OpenAI schemas) the model can call …
         self.after = after
         self.touch = touch or (lambda: None)
         self.call_tool = call_tool      # … run by call_tool(name, args, sources) -> result text
+        self.compact = compact          # compact(messages) -> (messages, note | None): a long chat summarised
 
 
 MAX_ROUNDS = 4          # tool rounds per question; the round after the last one answers without tools
@@ -160,33 +161,49 @@ def make_handler(hooks: Hooks):
                 else:
                     msgs.insert(0, {"role": "system", "content": aug["system"]})
             msgs[-1] = dict(msgs[-1], content=with_prefix(msgs[-1].get("content"), aug.get("prefix") or ""))
+            notes = []
+            if hooks.compact:
+                try:
+                    msgs, note = hooks.compact(msgs)
+                    if note:
+                        notes.append(note)
+                except Exception:
+                    pass        # sent whole: llama-server answers "context exceeded" as it would without us
             body["messages"] = msgs
             # our tools only when the page sent none of its own (llama-ui's MCP servers keep working as they do)
             ours = bool(aug.get("tools")) and hooks.call_tool is not None and not body.get("tools")
             if ours:
                 body["tools"] = aug["tools"]
-            self._run(body, q, list(aug.get("sources") or []), ours, aug.get("prefetch") if ours else None)
+            self._run(body, q, list(aug.get("sources") or []), ours, aug.get("prefetch") if ours else None, notes)
 
         def _emit(self, ev):
             self.wfile.write(("data: " + json.dumps(ev, ensure_ascii=False) + "\n\n").encode("utf-8"))
             self.wfile.flush()
 
-        def _run(self, body, q, sources, ours, prefetch=None):
+        def _open(self, st):
+            """Start the page's event stream before the model's first piece (to show the app's own notes)."""
+            if not st["sent"]:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                st["sent"] = True
+                st["last"] = {"object": "chat.completion.chunk", "created": int(time.time()), "id": "chatcmpl-fe"}
+
+        def _run(self, body, q, sources, ours, prefetch=None, notes=()):
             """Stream the answer to the page; a round that ends in tool calls is not shown as such: the app runs
             the calls (a 🔎 line in the page's reasoning box says what was looked up), adds the results and asks
             again, up to MAX_ROUNDS — the last round goes without tools, so it has to answer.
             prefetch [(tool, args)]: calls the app makes before the first round, handed over as the model's own."""
             answer, st = [], {"thai": False, "last": None, "sent": False}
+            if notes:
+                self._open(st)
+                for n in notes:
+                    self._note(st, n)
             pending = list(prefetch or [])
             for rnd in range(MAX_ROUNDS + 1):
                 if pending:
-                    if not st["sent"]:
-                        self.send_response(200)
-                        self.send_header("Content-Type", "text/event-stream")
-                        self.send_header("Cache-Control", "no-cache")
-                        self.end_headers()
-                        st["sent"] = True
-                        st["last"] = {"object": "chat.completion.chunk", "created": int(time.time()), "id": "chatcmpl-fe"}
+                    self._open(st)
                     ids = [f"call_pre_{i}" for i in range(len(pending))]
                     body["messages"] = body["messages"] + [{"role": "assistant", "content": "", "tool_calls": [
                         {"id": i, "type": "function", "function": {"name": n, "arguments": json.dumps(a, ensure_ascii=False)}}

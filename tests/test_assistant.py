@@ -209,6 +209,64 @@ class Proxy(unittest.TestCase):
         self.assertEqual(self.after[0][0], "q?")
 
 
+class Compact(unittest.TestCase):
+    """A long chat: the early turns become a cached summary in the system message, the recent ones stay."""
+    def setUp(self):
+        from assistant import compact as ACP
+        self.ACP = ACP
+        self.calls = []
+
+        def summarize(sys_, text):
+            self.calls.append(text)
+            return f"สรุป#{len(self.calls)}"
+        # n_ctx so that the budget is 2000 tokens: compact past 1600, down to 900; each turn = 100 + 6 tokens
+        self.c = ACP.Compactor(summarize, count=lambda t: 100, n_ctx=lambda: 2000 + ACP.RESERVE + ACP.FIXED)
+
+    def chat(self, turns):
+        m = [{"role": "system", "content": "SYS"}]
+        for i in range(turns):
+            m += [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": f"a{i}"}]
+        return m + [{"role": "user", "content": "now"}]
+
+    def test_short_chat_untouched(self):
+        m = self.chat(3)
+        self.assertEqual(self.c.apply(m), (m, None))
+        self.assertEqual(self.calls, [])
+
+    def test_long_chat_summarised_and_reused(self):
+        m = self.chat(10)                                   # 21 messages ≈ 2226 tokens > 1600
+        out, note = self.c.apply(m)
+        self.assertIn("🗜", note)
+        self.assertEqual(out[0]["role"], "system")
+        self.assertTrue(out[0]["content"].startswith("SYS\n\n[สรุปบทสนทนาก่อนหน้า"))
+        self.assertTrue(out[0]["content"].endswith("สรุป#1"))
+        self.assertEqual(out[1]["role"], "user")
+        self.assertEqual(out[-1]["content"], "now")
+        self.assertLessEqual(len(out[1:]) * 106, 0.45 * 2000 + 106)
+        self.assertNotIn("q9", self.calls[0])               # recent turns are not summarised
+        # the next question of the same chat: same summary, no new model call
+        m2 = m[:-1] + [{"role": "user", "content": "now"}, {"role": "assistant", "content": "ans"}, {"role": "user", "content": "next"}]
+        out2, note2 = self.c.apply(m2)
+        self.assertIsNone(note2)
+        self.assertEqual(len(self.calls), 1)
+        self.assertTrue(out2[0]["content"].endswith("สรุป#1"))
+        self.assertEqual(out2[-1]["content"], "next")
+
+    def test_cut_moves_forward_from_old_summary(self):
+        m = self.chat(10)
+        self.c.apply(m)
+        longer = self.chat(20)                              # same chat, much later
+        out, note = self.c.apply(longer)
+        self.assertIn("🗜", note)
+        self.assertEqual(len(self.calls), 2)
+        self.assertTrue(self.calls[1].startswith("[สรุปเดิม]\nสรุป#1"))   # built on the first summary
+        self.assertTrue(out[0]["content"].endswith("สรุป#2"))
+
+    def test_text_of_drops_think_and_sources(self):
+        m = {"role": "assistant", "content": "<think>x</think>ตอบ\n\n---\n*ที่มาจากเนื้อหาวิชา: [1] a*"}
+        self.assertEqual(self.ACP.text_of(m), "ตอบ")
+
+
 class ToolModel(BaseHTTPRequestHandler):
     """Streams a find_parts call while it has no tool result, then an answer naming what the result said."""
     seen = []
