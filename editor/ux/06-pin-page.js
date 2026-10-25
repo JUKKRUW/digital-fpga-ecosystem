@@ -98,6 +98,15 @@ function uxSyncSimPinmap(){
   if(SIM_REDRAW) try{ SIM_REDRAW(); }catch(_){}
 }
 function uxRenderPinPage(){
+  const host=$("#simPinPicker"); if(!host) return;
+  // re-drawing the table jumped a long page back to the top after each pick: keep every scroll position
+  const kept=[]; for(let el=host; el; el=el.parentElement) if(el.scrollTop) kept.push([el, el.scrollTop]);
+  const inner=host.querySelector(".pp-wrap"), innerTop=inner?inner.scrollTop:0, winY=window.scrollY;
+  try{ return uxRenderPinPageInner(); }
+  finally{ kept.forEach(([el,t])=>{ el.scrollTop=t; }); const w=host.querySelector(".pp-wrap"); if(w) w.scrollTop=innerTop;
+    if(window.scrollY!==winY) window.scrollTo(window.scrollX, winY); }
+}
+function uxRenderPinPageInner(){
   const host=$("#simPinPicker"), sch=activeSch(); if(!host||!sch) return;
   uxNormPinmap(sch);
   const bits=uxPortBits(sch), own=sch.pinmap||{};
