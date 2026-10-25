@@ -1,10 +1,11 @@
-// โหมดเรียบง่าย (exam mode): no AI, no sim page, no library / generators, no MCP; canvas sim, pins, paste and a hand-written
+// โหมดเรียบง่าย (exam mode, View ▸ โหมดเรียบง่าย): no AI, no sim page, no library / generators, no MCP; canvas sim, pins, paste and a hand-written
 // VHDL block stay; the choice survives a reload; leaving asks first.
 const { test, expect } = require("@playwright/test");
 const { openEditor } = require("./helpers");
 
 test("simple mode hides AI, the sim page and the generators; keeps the canvas sim; survives a reload", async ({ page }) => {
   await openEditor(page);
+  await page.click('#menu button[data-menu="view"]');
   await page.click("#btnSimple");
   await expect(page.locator("#btnSimple")).toHaveClass(/on/);
   await expect(page.locator("#btnAiChat")).toBeHidden();
@@ -26,6 +27,8 @@ test("simple mode hides AI, the sim page and the generators; keeps the canvas si
   await page.reload(); await page.waitForFunction(() => typeof UX === "object"); await page.waitForTimeout(700);
   await page.evaluate(() => document.querySelectorAll(".modal-bg").forEach(m => m.remove()));
   await expect(page.locator("#btnSimple")).toHaveClass(/on/);
+  await expect(page.locator("#btnSimple")).toContainText("✓");
+  await page.click('#menu button[data-menu="view"]');
   await page.click("#btnSimple");
   await page.click("#smLeave");
   await expect(page.locator("#btnSimple")).not.toHaveClass(/on/);
