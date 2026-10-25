@@ -9,7 +9,9 @@ test("every VHDL library block builds and passes its check; the LCD refuses Thai
   const r = await page.evaluate(() => {
     const cases = [["add", { n: 8 }], ["sub", { n: 6 }], ["mul", { n: 4 }], ["divmod", { n: 6 }], ["bin2dec", { digits: 4 }], ["seg7_num", {}], ["seg7_num", { blank: false }],
       ["lcd16x2", {}], ["lcd16x2", { line1: "HELLO", line2: "WORLD" }],
-      ["lcd_scroll", {}], ["lcd_scroll", { text: "HI", right: true }], ["lcd_scroll", { row: 2, other: "VALUE: ####", text: "SCROLL ME PLEASE" }], ["adc_mcp3208", {}], ["adc_mcp3208", { ch: 0 }], ["uart_tx", { baud: 9600 }], ["tone", {}]];
+      ["lcd_scroll", {}], ["lcd_scroll", { text: "HI", right: true }], ["lcd_scroll", { row: 2, other: "VALUE: ####", text: "SCROLL ME PLEASE" }], ["adc_mcp3208", {}], ["adc_mcp3208", { ch: 0 }], ["uart_tx", { baud: 9600 }], ["tone", {}],
+      ["note_tone", {}], ["note_tone", { oct_in: true }], ["piano", {}], ["melody", {}], ["melody", { loop: false, song: "C4 R:0.5 E4:1.5 Bb3" }],
+      ["ascii_7seg", {}], ["lcd_ascii", {}], ["uart_text", {}]];
     const bad = [];
     cases.forEach(([k, a]) => { try { const x = vlBuild(k, a); if (!x.verified.pass || !state.project.customs[x.name]) bad.push(k); } catch (e) { bad.push(k + ": " + e.message); } });
     const all = Object.keys(VLIB).filter(k => !cases.some(c => c[0] === k));

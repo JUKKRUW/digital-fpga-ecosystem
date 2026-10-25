@@ -6,12 +6,14 @@
   "เปรียบเทียบ / ตรวจสอบ",
   "MUX / DEMUX / Decoder / Encoder",
   "แปลงรหัส",
+  "ASCII / ตัวอักษร",
   "จอ 7-segment",
   "ไฟ LED / PWM",
   "Flip-flop / Register",
   "ตัวนับ",
   "นาฬิกา / หารความถี่",
   "ปุ่มกด / ขอบสัญญาณ",
+  "เสียง / โน้ตดนตรี",
   "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
   "ระบบทั้งแลป"
  ],
@@ -579,7 +581,7 @@
    "kind": "bcd2_compare",
    "label": "เปรียบเทียบเลข BCD 2 หลัก",
    "category": "เปรียบเทียบ / ตรวจสอบ",
-   "description": "a (a_hi a_lo) กับ b (b_hi b_lo): หลักสิบก่อน เท่ากันค่อยดูหลักหน่วย → gt, eq, lt — แลป 6-3 · ต่อจากตัวเปรียบเทียบ 4 บิต 2 ตัว",
+   "description": "a (a_hi a_lo) กับ b (b_hi b_lo): หลักสิบก่อน เท่ากันค่อยดูหลักหน่วย → gt, eq, lt — แลป 6-3 · COMPM4 2 ตัว (หลักสิบ, หลักหน่วย)",
    "params": {},
    "sequential": false,
    "ports": {
@@ -812,7 +814,7 @@
   {
    "kind": "bcd_ascii",
    "label": "BCD → ASCII (จอ LCD)",
-   "category": "แปลงรหัส",
+   "category": "ASCII / ตัวอักษร",
    "description": "d 0–9 → '0'–'9' (0x30 + d) · d > 9 → ช่องว่าง 0x20 — แลป 8",
    "params": {},
    "sequential": false,
@@ -973,7 +975,7 @@
    "kind": "pwm",
    "label": "PWM (ปรับความสว่าง / ความเร็ว)",
    "category": "ไฟ LED / PWM",
-   "description": "pwm = 1 เมื่อตัวนับภายใน (0 … 2ⁿ−1 วนทุก clock) < duty → duty/2ⁿ ของเวลา · duty = 0 ดับ · n = 2..8 บิต · clock ≥ 2ⁿ × 100 Hz ไม่ให้เห็นกะพริบ",
+   "description": "pwm = 1 เมื่อตัวนับภายใน (0 … 2ⁿ−1 วนทุก clock) < duty → duty/2ⁿ ของเวลา · duty = 0 ดับ · ตัวนับ mod-2ⁿ จากคลัง (n ≤ 6) เทียบด้วย COMPM ในคลังอุปกรณ์ · n = 2..8 บิต · clock ≥ 2ⁿ × 100 Hz ไม่ให้เห็นกะพริบ",
    "params": {
     "n": "2..8"
    },
@@ -1091,6 +1093,123 @@
     ],
     "out": [
      "p[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "ring_counter",
+   "label": "ไล่บิตทีละตำแหน่ง (ring / one-hot)",
+   "category": "ตัวนับ",
+   "description": "มีบิตเป็น 1 ตัวเดียววิ่ง q0 → q(n−1) แล้ววน (…0001 → 0010 → 0100 → 1000) ทุก clock · dir down = วิ่งกลับทาง · shift = D-FF n ตัวต่อเป็นวง ตั้งตัวเองได้ (d0 = 1 เมื่อบิตอื่นเป็น 0 หมด) · decoder = ตัวนับ + DECODER ในคลังอุปกรณ์ (n = 4, 8, 16) · en / clr (กลับไปบิตแรก) ได้ · n = 2..16",
+   "params": {
+    "n": "2..16",
+    "how": [
+     "shift",
+     "decoder"
+    ],
+    "down": "true/false",
+    "en": "true/false",
+    "clr": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "ascii_case",
+   "label": "ASCII ตัวพิมพ์ใหญ่ ↔ เล็ก",
+   "category": "ASCII / ตัวอักษร",
+   "description": "a = รหัส ASCII 7 บิต → y · upper = a–z เป็น A–Z (ลบ 0x20) · lower = A–Z เป็น a–z · swap = สลับทั้งคู่ · ตัวอื่นผ่านไปเหมือนเดิม — ต่างกันแค่บิต 5",
+   "params": {
+    "mode": [
+     "upper",
+     "lower",
+     "swap"
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[6:0]"
+    ],
+    "out": [
+     "y[6:0]"
+    ]
+   }
+  },
+  {
+   "kind": "hex_ascii",
+   "label": "ค่า 0–15 → ตัวอักษร ASCII ('0'–'9', 'A'–'F')",
+   "category": "ASCII / ตัวอักษร",
+   "description": "v 4 บิต → ascii 8 บิต: 0–9 = 0x30–0x39, 10–15 = 'A'–'F' (0x41–0x46) หรือ 'a'–'f' ถ้า lower · ใช้ส่งเลขฐาน 16 ออก UART / แสดงบน LCD",
+   "params": {
+    "lower": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "v[3:0]"
+    ],
+    "out": [
+     "ascii[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "ascii_value",
+   "label": "ตัวอักษร ASCII → ค่า ('0'–'9' / 'A'–'F')",
+   "category": "ASCII / ตัวอักษร",
+   "description": "ascii 8 บิต → v 4 บิต + valid · '0'–'9' = 0–9 · hex: 'A'–'F' และ 'a'–'f' = 10–15 · ตัวอื่น valid = 0, v = 0 — ใช้รับเลขจาก UART / คีย์บอร์ด",
+   "params": {
+    "hex": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "ascii[7:0]"
+    ],
+    "out": [
+     "v[3:0]",
+     "valid"
+    ]
+   }
+  },
+  {
+   "kind": "note_divider",
+   "label": "โน้ตจากตัวหารความถี่ (วงจรเกต)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "clk_in 50 MHz ÷ N → clk_out = ความถี่ของโน้ตที่เลือก (duty 50 %) ต่อ buzzer ได้เลย · N = 50 000 000 / f ปัดเป็นคู่ · เช่น A4 440 Hz = ÷113 636 · ไม่ใช้ VHDL",
+   "params": {
+    "note": [
+     "C",
+     "C#",
+     "D",
+     "D#",
+     "E",
+     "F",
+     "F#",
+     "G",
+     "G#",
+     "A",
+     "A#",
+     "B"
+    ],
+    "octave": "0..8",
+    "n": "0..2147483648"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk_in"
+    ],
+    "out": [
+     "clk_out"
     ]
    }
   }
@@ -1378,6 +1497,198 @@
    "board_pins": [
     "clk",
     "buzzer"
+   ]
+  },
+  {
+   "kind": "note_tone",
+   "label": "เล่นโน้ตจากสวิตช์ (VHDL)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "note = 1–12 → C, C#, D, D#, E, F, F#, G, G#, A, A#, B (0 = เงียบ) · octave ตั้งไว้ หรือ oct_in = เลือกจากขา oct (0–8) · ความถี่ตามตาราง (A4 = 440 Hz) → buzzer ของบอร์ด EDGE",
+   "params": {
+    "octave": "octave: 0..8 (ค่าเริ่ม 4)",
+    "oct_in": "เลือก octave จากขา oct: true/false",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "note[3:0]"
+    ],
+    "out": [
+     "buzzer"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "buzzer",
+    "note[0]",
+    "note[1]",
+    "note[2]",
+    "note[3]"
+   ]
+  },
+  {
+   "kind": "piano",
+   "label": "เปียโน 8 คีย์ (โด เร มี … โด) (VHDL)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "key[0..7] = C D E F G A B C (octave ถัดไป) ของ octave ที่ตั้ง · กดหลายคีย์ = คีย์เลขน้อยดัง · ไม่กด = เงียบ · ต่อสวิตช์หรือปุ่ม → buzzer",
+   "params": {
+    "octave": "octave: 0..7 (ค่าเริ่ม 4)",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "key[7:0]"
+    ],
+    "out": [
+     "buzzer"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "buzzer",
+    "key[0]",
+    "key[1]",
+    "key[2]",
+    "key[3]",
+    "key[4]",
+    "key[5]",
+    "key[6]",
+    "key[7]"
+   ]
+  },
+  {
+   "kind": "melody",
+   "label": "เล่นเพลงจากโน้ต (VHDL)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "เขียนเพลงเป็นโน้ต เช่น \"C4 C4 G4 G4 A4 A4 G4:2\" (R = พัก, :2 = 2 จังหวะ, :0.5 = ครึ่งจังหวะ, # / b ได้) · bpm ตั้งได้ · en = 1 เล่น, 0 = หยุดและกลับต้นเพลง · loop = วนซ้ำ ไม่งั้น done = 1 เมื่อจบ · เว้นช่วงสั้น ๆ ท้ายทุกโน้ตให้ได้ยินโน้ตซ้ำ",
+   "params": {
+    "song": "โน้ต: ข้อความ เช่น \"C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2\"",
+    "bpm": "ความเร็ว (bpm): 30..300 (ค่าเริ่ม 120)",
+    "loop": "วนซ้ำ: true/false",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "en"
+    ],
+    "out": [
+     "buzzer",
+     "done"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "en",
+    "buzzer",
+    "done"
+   ]
+  },
+  {
+   "kind": "ascii_7seg",
+   "label": "ตัวอักษร ASCII → 7-segment (VHDL)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "code 8 บิต → seg (a = บิต 0 … g = บิต 6) · '0'–'9', 'A'–'Z' และ 'a'–'z' (ตามตารางตัวอักษรของวิชา), '-' '_' '=' ช่องว่าง · ตัวที่แสดงไม่ได้ = ดับ · active-low สำหรับบอร์ด EDGE (เป็นตารางใน VHDL — แบบเกตใช้ ~400 เกต)",
+   "params": {
+    "active_low": "active-low (บอร์ด EDGE): true/false"
+   },
+   "ports": {
+    "in": [
+     "code[7:0]"
+    ],
+    "out": [
+     "seg[6:0]"
+    ]
+   },
+   "board_pins": [
+    "seg[0]",
+    "seg[1]",
+    "seg[2]",
+    "seg[3]",
+    "seg[4]",
+    "seg[5]",
+    "seg[6]",
+    "code[0]",
+    "code[1]",
+    "code[2]",
+    "code[3]",
+    "code[4]",
+    "code[5]",
+    "code[6]",
+    "code[7]"
+   ]
+  },
+  {
+   "kind": "lcd_ascii",
+   "label": "จอ LCD: ตัวอักษรจากรหัส ASCII (VHDL)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "code 8 บิต (เช่นจากสวิตช์) → จอ LCD 16×2 · ในข้อความ @ = ตัวอักษรของ code, % = เลขฐาน 16 (ใส่ %% = 2 หลัก), # = เลขฐาน 10 (### = 3 หลัก), ~ = เลขฐาน 2 (8 ตัว = 8 บิต) · รหัสต่ำกว่า 0x20 แสดงเป็นช่องว่าง",
+   "params": {
+    "line1": "บรรทัด 1: ข้อความ เช่น \"CHAR: @\"",
+    "line2": "บรรทัด 2: ข้อความ เช่น \"HEX:%% DEC:###\"",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "code[7:0]"
+    ],
+    "out": [
+     "lcd_data[7:0]",
+     "lcd_rs",
+     "lcd_e"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "lcd_rs",
+    "lcd_e",
+    "lcd_data[0]",
+    "code[0]",
+    "lcd_data[1]",
+    "code[1]",
+    "lcd_data[2]",
+    "code[2]",
+    "lcd_data[3]",
+    "code[3]",
+    "lcd_data[4]",
+    "code[4]",
+    "lcd_data[5]",
+    "code[5]",
+    "lcd_data[6]",
+    "code[6]",
+    "lcd_data[7]",
+    "code[7]"
+   ]
+  },
+  {
+   "kind": "uart_text",
+   "label": "ส่งข้อความออก UART (VHDL)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "กด start (ขอบขาขึ้น) → ส่งข้อความทีละตัว (ASCII, 8N1) ไปที่คอม · ต่อท้ายด้วยขึ้นบรรทัดใหม่ (CR LF) ได้ · busy = 1 ระหว่างส่ง · ดูในโปรแกรม serial terminal ที่ baud เดียวกัน",
+   "params": {
+    "text": "ข้อความ: ข้อความ เช่น \"HELLO FPGA\"",
+    "crlf": "ขึ้นบรรทัดใหม่ท้ายข้อความ: true/false",
+    "baud": "baud: 9600 | 19200 | 57600 | 115200",
+    "clk_hz": "clk (Hz): 10000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "start"
+    ],
+    "out": [
+     "tx",
+     "busy"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "start",
+    "tx",
+    "busy"
    ]
   }
  ],
