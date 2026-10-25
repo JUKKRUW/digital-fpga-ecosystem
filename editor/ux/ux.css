@@ -371,3 +371,17 @@
 .lib-io{font-size:11px;line-height:1.5;color:var(--ink);background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-family:"JetBrains Mono",monospace;word-break:break-word}
 .lib-io b{font-family:inherit;color:var(--ink-dim);font-weight:600}
 .lib-grp{font-size:10.5px}
+/* 66 — VHDL library blocks, icons, Tools menu */
+#menu .gen-mi.lib-hidden{display:none}
+.lib-svg{display:block;width:15px;height:15px}
+.lib-cat .ic, .lib-sh .ic, .lib-mh .ic{display:inline-flex;align-items:center;justify-content:center;width:18px;vertical-align:-3px}
+.pt-badge.vl{color:#7c3aed;border-color:#7c3aed}
+.vl-src{margin-top:8px;font-size:12px} .vl-src textarea{width:100%;min-height:220px;font-size:11px}
+/* 68 — โหมดเรียบง่าย */
+.topbar .simple-btn{font-size:12px}
+.topbar .simple-btn.on{border-color:var(--ok,#16a34a);color:var(--ok,#16a34a);font-weight:600}
+body.simple-mode #btnAiChat, body.simple-mode #aiChat, body.simple-mode .step[data-stage="sim"],
+body.simple-mode [data-act="realize-block"], body.simple-mode [data-act="cmdk"], body.simple-mode #iTruth,
+body.simple-mode #menu .gen-mi, body.simple-mode #menu .dd-head, body.simple-mode #btnExportIntent{display:none !important}
+body.simple-mode .step[data-stage="sim"] + *{display:none}
+body.simple-mode #menu .gen-mi.lib-hidden[data-gen="vhdl_block"]{display:flex !important}
