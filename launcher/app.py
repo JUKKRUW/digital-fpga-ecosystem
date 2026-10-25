@@ -636,7 +636,7 @@ def assistant_ui_start(port: int) -> None:
     _ASSIST["compact"] = ACP.Compactor(summarize, count, n_ctx)
     _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch,
                                          lambda name, args, sources: assistant_toolbox().call(name, args, sources),
-                                         _ASSIST["compact"].apply), port)
+                                         _ASSIST["compact"].apply, _ASSIST["compact"].command), port)
 
 
 def assistant_ui_url() -> str:

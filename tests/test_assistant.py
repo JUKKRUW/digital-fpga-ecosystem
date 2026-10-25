@@ -262,6 +262,31 @@ class Compact(unittest.TestCase):
         self.assertTrue(self.calls[1].startswith("[สรุปเดิม]\nสรุป#1"))   # built on the first summary
         self.assertTrue(out[0]["content"].endswith("สรุป#2"))
 
+    def test_compact_command_then_go_on(self):
+        self.assertTrue(self.ACP.is_command(" /compact ") and self.ACP.is_command("/ย่อ") and self.ACP.is_command("ย่อแชต"))
+        self.assertFalse(self.ACP.is_command("/compact this") or self.ACP.is_command("ช่วยย่อแชตนี้หน่อย"))
+        m = self.chat(4)[:-1] + [{"role": "user", "content": "/compact"}]
+        reply = self.c.command(m)
+        self.assertTrue(reply.startswith("🗜 **ย่อแชตแล้ว** — 8 ข้อความ"))
+        self.assertTrue(reply.endswith("สรุป#1"))
+        self.assertIn("q0", self.calls[0])
+        # the page sends the command and the app's reply back with the next question: both are dropped
+        nxt = m + [{"role": "assistant", "content": reply}, {"role": "user", "content": "ต่อเลย"}]
+        out, note = self.c.apply(nxt)
+        self.assertIsNone(note)
+        self.assertEqual([x["content"] for x in out[1:]], ["ต่อเลย"])
+        self.assertTrue(out[0]["content"].endswith("สรุป#1"))
+        # a second /compact later builds on the first summary, without the first exchange
+        more = nxt + [{"role": "assistant", "content": "ตอบ"}, {"role": "user", "content": "/compact"}]
+        self.c.command(more)
+        self.assertTrue(self.calls[1].startswith("[สรุปเดิม]\nสรุป#1"))
+        self.assertNotIn("ย่อแชตแล้ว", self.calls[1])
+        self.assertNotIn("/compact", self.calls[1])
+
+    def test_nothing_to_compact(self):
+        self.assertIn("ยังไม่มี", self.c.command([{"role": "user", "content": "/compact"}]))
+        self.assertEqual(self.calls, [])
+
     def test_text_of_drops_think_and_sources(self):
         m = {"role": "assistant", "content": "<think>x</think>ตอบ\n\n---\n*ที่มาจากเนื้อหาวิชา: [1] a*"}
         self.assertEqual(self.ACP.text_of(m), "ตอบ")

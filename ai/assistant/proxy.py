@@ -55,13 +55,14 @@ def sources_line(sources) -> str:
 class Hooks:
     """What the launcher plugs in. augment(question) -> {"system", "prefix", "sources"}; after(question, answer);
     touch() on every request (the launcher quits when no window of it is open: this window counts)."""
-    def __init__(self, upstream, augment, after=None, touch=None, call_tool=None, compact=None):
+    def __init__(self, upstream, augment, after=None, touch=None, call_tool=None, compact=None, command=None):
         self.upstream = upstream        # () -> "http://127.0.0.1:8080"
         self.augment = augment          # may return "tools" (OpenAI schemas) the model can call …
         self.after = after
         self.touch = touch or (lambda: None)
         self.call_tool = call_tool      # … run by call_tool(name, args, sources) -> result text
         self.compact = compact          # compact(messages) -> (messages, note | None): a long chat summarised
+        self.command = command          # command(messages) -> reply: the user typed /compact (compact.COMMAND)
 
 
 MAX_ROUNDS = 4          # tool rounds per question; the round after the last one answers without tools
@@ -69,6 +70,8 @@ TOOL_LABEL = {"search_course": "ค้นเนื้อหาวิชา", "fi
 
 
 # the page pings while it is open (like launcher/web/shim.js in the app's own pages)
+from .compact import COMMAND  # noqa: E402  (the /compact command the page may type)
+
 PING_PATH = "/__fe_ping"
 PING_JS = b'<script>setInterval(function(){fetch("' + PING_PATH.encode() + b'",{cache:"no-store"}).catch(function(){})},15000)</script>'
 
@@ -151,6 +154,21 @@ def make_handler(hooks: Hooks):
             if not (body.get("stream") and msgs and msgs[-1].get("role") == "user"):
                 return self._pass("POST", raw)      # the page's own side calls (titles …) as they are
             q = user_text(msgs[-1].get("content")).strip()
+            if hooks.command and COMMAND.match(q):          # /compact: the app answers itself
+                st = {"thai": True, "last": None, "sent": False}
+                self._open(st)
+                try:
+                    self._note(st, "🗜 กำลังย่อแชต…\n")
+                    reply = hooks.command(msgs)
+                except Exception as e:
+                    reply = f"⚠ ย่อแชตไม่สำเร็จ: {e}"
+                try:
+                    self._piece(st, {"content": reply})
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                except OSError:
+                    pass
+                return
             try:
                 aug = hooks.augment(q) or {}
             except Exception as e:

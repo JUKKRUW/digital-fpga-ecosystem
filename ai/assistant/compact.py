@@ -91,16 +91,9 @@ class Compactor:
         if len(conv) <= KEEP_MIN:
             return messages, None
         sizes = [self.tokens(text_of(m)) + 6 for m in conv]
-        total, budget = sum(sizes), self.budget()
-        # the furthest cut this chat already has a summary for (a cut is just before a user message)
+        budget = self.budget()
         cuts = [i for i in range(1, len(conv) - KEEP_MIN + 1) if conv[i].get("role") == "user"]
-        known, summary = 0, ""
-        for i in reversed(cuts):
-            s = self.cache.get(self._key(conv[:i]))
-            if s is not None:
-                known, summary = i, s
-                self.cache.move_to_end(self._key(conv[:i]))
-                break
+        known, summary = self._known(conv)
         rest = sum(sizes[known:]) + (self.tokens(summary) if summary else 0)
         note = None
         if rest > HIGH * budget:
@@ -109,13 +102,8 @@ class Compactor:
             if target is None:
                 target = max([i for i in cuts if i > known] or [known])
             if target > known:
-                part = "\n\n".join(f"{'ผู้ใช้' if m.get('role') == 'user' else 'ผู้ช่วย'}: {text_of(m)}" for m in conv[known:target])
-                src = (f"[สรุปเดิม]\n{summary}\n\n[บทสนทนาต่อจากนั้น]\n{part}" if summary else part)
-                new = (self.summarize(SUMMARY_SYS, src) or "").strip()
+                new = self._summarise(conv, known, summary, target)
                 if new:
-                    self.cache[self._key(conv[:target])] = new
-                    while len(self.cache) > 64:
-                        self.cache.popitem(last=False)
                     note = f"🗜 ย่อบทสนทนาช่วงต้น ({target} ข้อความ) เป็นสรุป เพื่อให้คุยต่อได้\n"
                     known, summary = target, new
         if not summary:
@@ -124,6 +112,60 @@ class Compactor:
         sysmsg["content"] = (text_of(sysmsg) + "\n\n" if text_of(sysmsg) else "") + \
             "[สรุปบทสนทนาก่อนหน้าในแชตนี้ — ข้อความเก่ากว่านี้ไม่ได้ส่งมา]\n" + summary
         return [sysmsg] + conv[known:], note
+
+    def _known(self, conv):
+        """(index the kept turns start at, summary) — the furthest cut this chat has a summary for: before a
+        user message (automatic), or after a /compact exchange (the command and the app's reply are dropped too)."""
+        best = (0, "")
+        for i in range(1, len(conv) - 1):
+            if conv[i].get("role") != "user":
+                continue
+            k = self._key(conv[:i])
+            s = self.cache.get(k)
+            if s is None:
+                continue
+            start = i + 2 if is_command(text_of(conv[i])) and i + 2 < len(conv) else i
+            if start <= len(conv) - 1 and start >= best[0]:
+                best = (start, s)
+                self.cache.move_to_end(k)
+        return best
+
+    def _summarise(self, conv, known, summary, target) -> str:
+        part = "\n\n".join(f"{'ผู้ใช้' if m.get('role') == 'user' else 'ผู้ช่วย'}: {text_of(m)}"
+                           for m in conv[known:target] if not is_command(text_of(m)))
+        src = (f"[สรุปเดิม]\n{summary}\n\n[บทสนทนาต่อจากนั้น]\n{part}" if summary else part)
+        new = (self.summarize(SUMMARY_SYS, src) or "").strip()
+        if new:
+            self.cache[self._key(conv[:target])] = new
+            while len(self.cache) > 64:
+                self.cache.popitem(last=False)
+        return new
+
+    def command(self, messages: list) -> str:
+        """The user typed /compact: summarise everything before it now and say so (the reply the page shows).
+        The next questions of this chat send the summary + what comes after this exchange."""
+        head = 1 if messages and messages[0].get("role") == "system" else 0
+        conv = messages[head:]
+        j = len(conv) - 1                                   # the command itself
+        known, summary = self._known(conv[:j] + [{"role": "user", "content": ""}])
+        before = sum(self.tokens(text_of(m)) + 6 for m in conv[known:j])
+        if j - known < 2:
+            return "ยังไม่มีบทสนทนาให้ย่อครับ คุยต่อได้เลย"
+        new = self._summarise(conv, known, summary, j)
+        if not new:
+            return "⚠ ย่อแชตไม่สำเร็จ (โมเดลไม่ตอบ) ลองใหม่อีกครั้ง หรือเปิดแชตใหม่"
+        return (f"🗜 **ย่อแชตแล้ว** — {j} ข้อความ (~{before:,} token{' รวมสรุปเดิม' if summary else ''}) "
+                f"เหลือเป็นสรุป ~{self.tokens(new):,} token คุยต่อในแชตนี้ได้เลย\n\n"
+                f"**สิ่งที่ผู้ช่วยจำจากช่วงก่อนหน้า:**\n\n{new}")
+
+
+# the whole message only; "ย่อแชต" without the slash too (llama-ui opens its own command picker on "/",
+# which says "No matching command" — Enter still sends the text)
+COMMAND = re.compile(r"^\s*(/(compact|ย่อ|ย่อแชต)|ย่อแชต)\s*$", re.I)
+
+
+def is_command(text: str) -> bool:
+    return bool(COMMAND.match(text or ""))
 
 
 def server_hooks(base: str, timeout: float = 5):
