@@ -5,18 +5,18 @@
    when saving (or "กองกลาง" — not sorted), or in a category of their own; the project's VHDL blocks have one.
    The Modules tab is gone; #modulesPane stays (hidden) so older code that renders it still works. */
 const LIB_CATS=[
-  {id:"arith", icon:"➕", label:"บวก / ลบ / คูณ", kinds:["half_adder","full_adder","adder","half_subtractor","full_subtractor","subtractor","addsub","multiplier"]},
-  {id:"alu", icon:"🧮", label:"ALU", kinds:["alu_slice","alu"]},
-  {id:"cmp", icon:"⚖", label:"เปรียบเทียบ / ตรวจสอบ", kinds:["cmp_slice","comparator","bcd2_compare","bcd_valid","parity","majority"]},
-  {id:"sel", icon:"🔀", label:"MUX / DEMUX / Decoder / Encoder", kinds:["mux","mux_bus","demux","decoder","encoder"]},
-  {id:"conv", icon:"🔁", label:"แปลงรหัส", kinds:["bin2bcd","add3","tc_decode","bcd_ascii"]},
-  {id:"seg", icon:"🔢", label:"จอ 7-segment", kinds:["bcd_7seg","hex_7seg","char_7seg","seg7_mux4","text_scroll"]},
-  {id:"led", icon:"💡", label:"ไฟ LED / PWM", kinds:["led_pattern","pwm"]},
+  {id:"arith", icon:"±", label:"บวก / ลบ / คูณ", kinds:["half_adder","full_adder","adder","half_subtractor","full_subtractor","subtractor","addsub","multiplier"]},
+  {id:"alu", icon:"ƒ", label:"ALU", kinds:["alu_slice","alu"]},
+  {id:"cmp", icon:"≷", label:"เปรียบเทียบ / ตรวจสอบ", kinds:["cmp_slice","comparator","bcd2_compare","bcd_valid","parity","majority"]},
+  {id:"sel", icon:"⇶", label:"MUX / DEMUX / Decoder / Encoder", kinds:["mux","mux_bus","demux","decoder","encoder"]},
+  {id:"conv", icon:"⇄", label:"แปลงรหัส", kinds:["bin2bcd","add3","tc_decode","bcd_ascii"]},
+  {id:"seg", icon:"8", label:"จอ 7-segment", kinds:["bcd_7seg","hex_7seg","char_7seg","seg7_mux4","text_scroll"]},
+  {id:"led", icon:"◉", label:"ไฟ LED / PWM", kinds:["led_pattern","pwm"]},
   {id:"ff", icon:"▤", label:"Flip-flop / Register", kinds:["toggle","register","register_en","shift_register"]},
-  {id:"cnt", icon:"⏱", label:"ตัวนับ", kinds:["binary_counter","mod_counter","bcd_counter","counter_digit","bcd_counter_multi","seq_counter","jk_counter"]},
+  {id:"cnt", icon:"↻", label:"ตัวนับ", kinds:["binary_counter","mod_counter","bcd_counter","counter_digit","bcd_counter_multi","seq_counter","jk_counter"]},
   {id:"clk", icon:"÷", label:"นาฬิกา / หารความถี่", kinds:["clock_divider","divider_chain"]},
-  {id:"btn", icon:"🔘", label:"ปุ่มกด / ขอบสัญญาณ", kinds:["debounce","one_pulse","edge_detector"]},
-  {id:"lab", icon:"🎓", label:"ระบบทั้งแลป", kinds:["lab6_counter","lab7_countdown"]},
+  {id:"btn", icon:"⊓", label:"ปุ่มกด / ขอบสัญญาณ", kinds:["debounce","one_pulse","edge_detector"]},
+  {id:"lab", icon:"◈", label:"ระบบทั้งแลป", kinds:["lab6_counter","lab7_countdown"]},
 ];
 const LIB_COMMON="กองกลาง";
 const LIB={cat:"all", q:""};
@@ -48,17 +48,24 @@ function libCatList(){
   const n=c=>libItems(c).length;
   const L=LIB_CATS.map(c=>({id:c.id, icon:c.icon, label:c.label}));
   L.push({sep:true});
-  L.push({id:"mine", icon:"📦", label:"โมดูลของฉัน — "+LIB_COMMON});
-  libCustomCats().forEach(c=>L.push({id:c, icon:"🗂", label:c.slice(2)}));
-  L.push({id:"vhdl", icon:"⌨", label:"บล็อก VHDL ในโปรเจกต์นี้"});
-  return [{id:"all", icon:"📚", label:"ทั้งหมด"}].concat(L).map(x=>x.sep ? x : Object.assign(x, {n:n(x.id)}));
+  L.push({id:"mine", icon:"▣", label:"โมดูลของฉัน — "+LIB_COMMON});
+  libCustomCats().forEach(c=>L.push({id:c, icon:"▢", label:c.slice(2)}));
+  L.push({id:"vhdl", icon:"‹›", label:"บล็อก VHDL ในโปรเจกต์นี้"});
+  return [{id:"all", icon:"▦", label:"ทั้งหมด"}].concat(L).map(x=>x.sep ? x : Object.assign(x, {n:n(x.id)}));
+}
+/* the part's pins at the form's starting settings: "Input: a[3:0], b[3:0], cin · Output: s[3:0], cout" */
+function libPortsHtml(k){
+  try{ const P=PARTS[k], d={}; Object.entries(P.params||{}).forEach(([n,s])=>d[n]=s.uiDef!==undefined?s.uiDef:s.def);
+    const pp=P.ports(partParams(k, d)), fmt=o=>Object.entries(o).filter(([,w])=>w>0).map(([b,w])=>w>1?`${b}[${w-1}:0]`:b).join(", ");
+    return `<div class="lib-io"><div><b>Input:</b> ${esc(fmt(pp.in))||"—"}</div><div><b>Output:</b> ${esc(fmt(pp.out))||"—"}</div></div>`; }
+  catch(_){ return ""; }
 }
 function libCardHtml(it){
   if(it.kind==="part"){ const P=it.P;
     return `<div class="lib-card part" data-libpart="${esc(it.k)}" title="${esc(P.desc)}">
       <div class="lib-ct"><b>${esc(P.label)}</b> <span class="pt-badge ok" title="จำลองเทียบโมเดลอ้างอิงทุกครั้งที่สร้าง">✓ ตรวจทุกครั้ง</span></div>
       <div class="lib-cd">${esc(P.desc)}</div>
-      <div class="lib-ca"><button class="btn btn-primary" data-libpart="${esc(it.k)}">สร้าง…</button>${LIB.q?`<span class="muted">${esc(P.group)}</span>`:""}</div></div>`; }
+      ${libPortsHtml(it.k)}${LIB.q?`<div class="lib-grp muted">${esc(P.group)}</div>`:""}</div>`; }
   if(it.kind==="vhdl"){ const cc=it.cc;
     return `<div class="lib-card"><div class="lib-ct"><b>${esc(cc.name)}</b> <span class="pt-badge">VHDL</span></div>
       <div class="lib-cd">${esc((cc.ports||[]).map(p=>p.width>1?`${p.name}[${p.width-1}:0]`:p.name).join(", "))}</div>
@@ -90,17 +97,17 @@ function libRender(win){
     : LIB.q ? `ไม่พบ “${esc(LIB.q)}”` : `ยังไม่มีโมดูลในหมวดนี้ — เปิดแผ่นที่ต้องการ แล้วกด “＋ เก็บแผ่นที่เปิดอยู่เข้าคลัง” เลือกหมวดนี้`;
   // "ทั้งหมด": a section per category, in the sidebar's order
   const body=LIB.cat==="all" && !LIB.q.trim()
-    ? cats.filter(c=>!c.sep && c.id!=="all" && c.n).map(c=>`<div class="lib-sh" data-libcat="${esc(c.id)}">${c.icon} ${esc(c.label)} <span class="muted">${c.n}</span></div>
+    ? cats.filter(c=>!c.sep && c.id!=="all" && c.n).map(c=>`<div class="lib-sh" data-libcat="${esc(c.id)}"><span class="ic">${c.icon}</span> ${esc(c.label)} <span class="muted">${c.n}</span></div>
         <div class="lib-grid">${libItems(c.id).map(libCardHtml).join("")}</div>`).join("")
     : `<div class="lib-grid">${items.length?items.map(libCardHtml).join(""):`<div class="muted lib-empty">${empty}</div>`}</div>`;
-  win.querySelector(".lib-main").innerHTML=`<div class="lib-mh"><b>${cur.icon} ${esc(LIB.q?`ผลค้นหา “${LIB.q}”`:cur.label)}</b>
+  win.querySelector(".lib-main").innerHTML=`<div class="lib-mh"><b><span class="ic">${cur.icon}</span> ${esc(LIB.q?`ผลค้นหา “${LIB.q}”`:cur.label)}</b>
       ${LIB.cat==="vhdl"?`<button class="btn" data-vhb="new">＋ บล็อก VHDL ใหม่</button>`:""}</div>`+body;
 }
 function openLibrary(cat){
   if(cat) LIB.cat=cat;
   libRegroup();                                   // parts added by later files (65) take their category too
   document.querySelectorAll(".lib-bg").forEach(x=>x.close());
-  const m=uxModal("📚 คลังชิ้นส่วนและโมดูล", `<div class="lib-win">
+  const m=uxModal("คลังชิ้นส่วนและโมดูล", `<div class="lib-win">
       <div class="lib-top"><input class="mod-search" id="libSearch" type="search" autocomplete="off" spellcheck="false" placeholder="🔍 ค้นหา (ชื่อ / คำอธิบาย / ชื่อขา) — เช่น 7-seg, หาร, mux" value="${esc(LIB.q)}">
         <button class="btn btn-primary" id="libSave">＋ เก็บแผ่นที่เปิดอยู่เข้าคลัง</button></div>
       <div class="lib-body"><div class="lib-side"></div><div class="lib-main"></div></div>
@@ -190,8 +197,8 @@ MCP_OPS.set_module_category = a=>{
   const tab=document.querySelector('.pane-tabs button[data-ltab="modules"]'); if(tab) tab.style.display="none";
   const box=[...document.querySelectorAll('#menu .dd-head')].find(h=>/ตัวสร้างวงจร/.test(h.textContent));
   if(box && !document.querySelector('#menu [data-gen="library"]')){
-    box.insertAdjacentHTML("afterend", `<button class="gen-mi lib-mi" data-gen="library" title="ชิ้นส่วนสำเร็จรูปที่ตรวจแล้ว แบ่งหมวด + โมดูลของฉัน"><span class="gi">📚</span><b>คลังชิ้นส่วนและโมดูล…</b></button>`);
+    box.insertAdjacentHTML("afterend", `<button class="gen-mi lib-mi" data-gen="library" title="ชิ้นส่วนสำเร็จรูปที่ตรวจแล้ว แบ่งหมวด + โมดูลของฉัน"><span class="gi">▦</span><b>คลังชิ้นส่วนและโมดูล…</b></button>`);
     document.querySelector('#menu [data-gen="library"]').addEventListener("click", ()=>openLibrary());
   }
-  GENERATORS.unshift({id:"library", icon:"📚", name:"คลังชิ้นส่วนและโมดูล", desc:"ชิ้นส่วนสำเร็จรูป (ตัวบวก ตัวนับ 7-seg …) แบ่งหมวด และโมดูลของฉัน", run:()=>openLibrary()});
+  GENERATORS.unshift({id:"library", icon:"▦", name:"คลังชิ้นส่วนและโมดูล", desc:"ชิ้นส่วนสำเร็จรูป (ตัวบวก ตัวนับ 7-seg …) แบ่งหมวด และโมดูลของฉัน", run:()=>openLibrary()});
 }

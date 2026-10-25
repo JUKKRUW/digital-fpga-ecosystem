@@ -367,3 +367,7 @@
 .lib-sh{font-size:12.5px;font-weight:700;margin:14px 2px 8px;cursor:pointer;color:var(--ink)}
 .lib-sh:first-of-type{margin-top:2px}
 .lib-sh:hover{color:var(--accent)}
+.lib-cat .ic, .lib-sh .ic, .lib-mh .ic{color:var(--accent);font-weight:700}
+.lib-io{font-size:11px;line-height:1.5;color:var(--ink);background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-family:"JetBrains Mono",monospace;word-break:break-word}
+.lib-io b{font-family:inherit;color:var(--ink-dim);font-weight:600}
+.lib-grp{font-size:10.5px}

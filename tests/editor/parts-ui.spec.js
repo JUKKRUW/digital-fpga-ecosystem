@@ -13,7 +13,7 @@ test("library window: a checked part placed as a block on the sheet on screen", 
   await win.locator('.lib-cat[data-libcat="btn"]').click();
   await expect(win.locator('.lib-main [data-libpart="debounce"]').first()).toBeVisible();
   await win.locator('.lib-cat[data-libcat="arith"]').click();
-  await win.locator('button[data-libpart="adder"]').click();
+  await win.locator('.lib-card[data-libpart="adder"]').click();
   const dlg = page.locator(".modal").last();
   await dlg.locator('[data-pp="n"]').fill("4");
   await dlg.locator('[data-pp="bus"]').check();
