@@ -84,6 +84,27 @@ class Stream(unittest.TestCase):
         self.assertEqual(FakeModel.last["model"], "qwen3:8b")
         self.assertNotIn("chat_template_kwargs", FakeModel.last)
 
+    def test_server_that_ignores_stream(self):
+        class Plain(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                b = json.dumps({"choices": [{"message": {"content": "<think>x</think>คำตอบ"}, "finish_reason": "stop"}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(b)))
+                self.end_headers()
+                self.wfile.write(b)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Plain)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            out = AB.Backend("llama", f"http://127.0.0.1:{srv.server_address[1]}/v1/chat/completions").complete([])
+            self.assertEqual((out["think"], out["text"], out["finish"]), ("x", "คำตอบ", "stop"))
+        finally:
+            srv.shutdown()
+
     def test_unreachable(self):
         with self.assertRaises(AB.BackendError):
             list(AB.Backend("llama", "http://127.0.0.1:9/v1/chat/completions").stream([], timeout=2))

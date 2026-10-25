@@ -91,6 +91,21 @@ class Backend:
             raise BackendError(f"the model is not reachable at {self.endpoint}: {e}")
         split = _ThinkSplitter()
         done = {"type": "done", "finish": "", "usage": None, "timings": None}
+        if "event-stream" not in (resp.headers.get("Content-Type") or ""):
+            # a server that ignores "stream" answers with the whole completion at once
+            with resp:
+                ev = json.loads(resp.read().decode("utf-8") or "{}")
+            if ev.get("error"):
+                raise BackendError("model server: " + json.dumps(ev["error"], ensure_ascii=False)[:300])
+            ch = (ev.get("choices") or [{}])[0]
+            m = ch.get("message") or {}
+            th = m.get("reasoning_content") or m.get("reasoning")
+            if th:
+                yield {"type": "think", "text": th}
+            for kind, txt in split.feed(m.get("content") or "") + split.flush():
+                yield {"type": kind, "text": txt}
+            yield dict(done, finish=ch.get("finish_reason") or "", usage=ev.get("usage"), timings=ev.get("timings"))
+            return
         with resp:
             for raw in resp:
                 line = raw.decode("utf-8", "replace").strip()
