@@ -3,7 +3,7 @@
    ✨ draw from a name, MCP control from outside), the sim page (the live simulation on the canvas stays:
    switches, lit wires, ⏭ 1 clk), the part / module library and every generator, the truth table of a part, and
    Ctrl+K. Writing a VHDL block by hand (Tools ▸ บล็อก VHDL) stays — that is writing a module. Pasting stays, so circuits copied from the separate library program (ISAN) can come in.
-   A button in the top bar turns it on (and shows that it is on); leaving asks first. The choice is kept
+   View ▸ โหมดเรียบง่าย turns it on (✓ while on); leaving asks first. The choice is kept
    (localStorage `schstudio.simpleMode`), so the app reopens in the same mode. */
 const SIMPLE={on:false, key:"schstudio.simpleMode"};
 function simpleSet(on, quiet){
@@ -11,7 +11,7 @@ function simpleSet(on, quiet){
   try{ localStorage.setItem(SIMPLE.key, on?"1":"0"); }catch(_){}
   document.body.classList.toggle("simple-mode", SIMPLE.on);
   const b=document.getElementById("btnSimple");
-  if(b){ b.classList.toggle("on", SIMPLE.on); b.textContent=SIMPLE.on?"● โหมดเรียบง่าย":"โหมดเรียบง่าย";
+  if(b){ b.classList.toggle("on", SIMPLE.on); b.innerHTML=(SIMPLE.on?"✓ ":"")+"โหมดเรียบง่าย (สอบ)";
     b.title=SIMPLE.on?"กำลังใช้โหมดเรียบง่าย (ไม่มี AI / หน้าจำลอง / ตัวสร้างวงจร) — กดเพื่อออก":"ซ่อน AI, หน้าจำลอง และตัวสร้างวงจร (สำหรับสอบ) — วาดเอง จำลองบนแผ่น เลือกขา ลงบอร์ด"; }
   if(SIMPLE.on){
     try{ if(AICHAT.open) toggleAiChat(); }catch(_){}
@@ -27,11 +27,13 @@ function simpleToggle(){
   m.querySelector("#smStay").onclick=()=>m.close();
   m.querySelector("#smLeave").onclick=()=>{ m.close(); simpleSet(false); };
 }
-/* the button, in the top bar beside the save chip */
+/* the switch: View ▸ โหมดเรียบง่าย (after the zoom items) */
 {
-  const save=document.querySelector('.topbar > [data-act="save-project"]');
-  if(save && !document.getElementById("btnSimple")){
-    save.insertAdjacentHTML("beforebegin", `<button class="btn simple-btn" id="btnSimple"></button>`);
+  const dd=document.querySelector('#menu .mi > button[data-menu="view"]'), box=dd && dd.parentElement.querySelector(".dd");
+  if(box && !document.getElementById("btnSimple")){
+    const hr=box.querySelector("hr");
+    const html=`<button id="btnSimple" class="simple-mi"></button><hr>`;
+    if(hr) hr.insertAdjacentHTML("afterend", html); else box.insertAdjacentHTML("beforeend", html);
     document.getElementById("btnSimple").addEventListener("click", simpleToggle);
   }
 }

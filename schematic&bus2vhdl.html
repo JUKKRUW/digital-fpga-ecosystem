@@ -13375,8 +13375,7 @@ init();
 .pt-badge.vl{color:#7c3aed;border-color:#7c3aed}
 .vl-src{margin-top:8px;font-size:12px} .vl-src textarea{width:100%;min-height:220px;font-size:11px}
 /* 68 — โหมดเรียบง่าย */
-.topbar .simple-btn{font-size:12px}
-.topbar .simple-btn.on{border-color:var(--ok,#16a34a);color:var(--ok,#16a34a);font-weight:600}
+#menu .simple-mi.on{color:var(--ok,#16a34a);font-weight:600}
 body.simple-mode #btnAiChat, body.simple-mode #aiChat, body.simple-mode .step[data-stage="sim"],
 body.simple-mode [data-act="realize-block"], body.simple-mode [data-act="cmdk"], body.simple-mode #iTruth,
 body.simple-mode #menu .gen-mi, body.simple-mode #menu .dd-head, body.simple-mode #btnExportIntent{display:none !important}
@@ -26171,7 +26170,7 @@ pasteClipboard=function(){
    ✨ draw from a name, MCP control from outside), the sim page (the live simulation on the canvas stays:
    switches, lit wires, ⏭ 1 clk), the part / module library and every generator, the truth table of a part, and
    Ctrl+K. Writing a VHDL block by hand (Tools ▸ บล็อก VHDL) stays — that is writing a module. Pasting stays, so circuits copied from the separate library program (ISAN) can come in.
-   A button in the top bar turns it on (and shows that it is on); leaving asks first. The choice is kept
+   View ▸ โหมดเรียบง่าย turns it on (✓ while on); leaving asks first. The choice is kept
    (localStorage `schstudio.simpleMode`), so the app reopens in the same mode. */
 const SIMPLE={on:false, key:"schstudio.simpleMode"};
 function simpleSet(on, quiet){
@@ -26179,7 +26178,7 @@ function simpleSet(on, quiet){
   try{ localStorage.setItem(SIMPLE.key, on?"1":"0"); }catch(_){}
   document.body.classList.toggle("simple-mode", SIMPLE.on);
   const b=document.getElementById("btnSimple");
-  if(b){ b.classList.toggle("on", SIMPLE.on); b.textContent=SIMPLE.on?"● โหมดเรียบง่าย":"โหมดเรียบง่าย";
+  if(b){ b.classList.toggle("on", SIMPLE.on); b.innerHTML=(SIMPLE.on?"✓ ":"")+"โหมดเรียบง่าย (สอบ)";
     b.title=SIMPLE.on?"กำลังใช้โหมดเรียบง่าย (ไม่มี AI / หน้าจำลอง / ตัวสร้างวงจร) — กดเพื่อออก":"ซ่อน AI, หน้าจำลอง และตัวสร้างวงจร (สำหรับสอบ) — วาดเอง จำลองบนแผ่น เลือกขา ลงบอร์ด"; }
   if(SIMPLE.on){
     try{ if(AICHAT.open) toggleAiChat(); }catch(_){}
@@ -26195,11 +26194,13 @@ function simpleToggle(){
   m.querySelector("#smStay").onclick=()=>m.close();
   m.querySelector("#smLeave").onclick=()=>{ m.close(); simpleSet(false); };
 }
-/* the button, in the top bar beside the save chip */
+/* the switch: View ▸ โหมดเรียบง่าย (after the zoom items) */
 {
-  const save=document.querySelector('.topbar > [data-act="save-project"]');
-  if(save && !document.getElementById("btnSimple")){
-    save.insertAdjacentHTML("beforebegin", `<button class="btn simple-btn" id="btnSimple"></button>`);
+  const dd=document.querySelector('#menu .mi > button[data-menu="view"]'), box=dd && dd.parentElement.querySelector(".dd");
+  if(box && !document.getElementById("btnSimple")){
+    const hr=box.querySelector("hr");
+    const html=`<button id="btnSimple" class="simple-mi"></button><hr>`;
+    if(hr) hr.insertAdjacentHTML("afterend", html); else box.insertAdjacentHTML("beforeend", html);
     document.getElementById("btnSimple").addEventListener("click", simpleToggle);
   }
 }
