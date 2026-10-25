@@ -38,16 +38,19 @@ def build(text: str) -> str:
 
 
 def main() -> int:
-    cur = HTML.read_text(encoding="utf-8")
+    # bytes in / out: on Windows read_text / write_text turn the file into CRLF lines (PR #40 did), which rewrote
+    # every line of the 3 MB file in git; the HTML is always written with LF and --check fails on a CRLF copy
+    raw = HTML.read_bytes().decode("utf-8")
+    cur = raw.replace("\r\n", "\n")
     new = build(cur)
     if "--check" in sys.argv:
-        if new != cur:
+        if new != raw:
             print("schematic&bus2vhdl.html is out of date with editor/ux/ — run: python editor/build.py")
             return 1
         print("editor html up to date")
         return 0
-    if new != cur:
-        HTML.write_text(new, encoding="utf-8")
+    if new != raw:
+        HTML.write_bytes(new.encode("utf-8"))
         print(f"rebuilt {HTML.name} ({len(new):,} bytes)")
     else:
         print("no changes")

@@ -114,6 +114,13 @@ DEFAULTS = {
         "llama_ctx": 0,           # >0 = context size (-c), over whatever llama_args says
         "llama_cache_ram": -1,    # >=0 = --cache-ram MB, over whatever llama_args says
         "llama_args": "",         # blank = llm.DEFAULT_ARGS (context 24K, tool calls, layers fitted to the GPU)
+        "assistant_backend": "llama",   # the chat's ถาม-ตอบ model: llama (the app's llama-server) | ollama | openai
+        "assistant_endpoint": "",       # ollama / openai: chat/completions URL (blank = Ollama's default)
+        "assistant_model": "",          # ollama / openai: model name
+        "assistant_tools": True,        # llama-ui: the model calls search_course / find_parts / app_help itself
+        "assistant_notes": True,        # without tools (and in the editor's chat): course notes in front of every question
+        "assistant_memory": True,       # remember what the user tells about themselves (<data>/assistant.sqlite)
+        "assistant_port": 8771,         # llama-ui behind the app's proxy (Home ▸ ผู้ช่วย AI); a fixed port keeps its chats
         "cosim": False,           # GHDL co-simulation check
         "ghdl": "",               # path to ghdl(.exe); blank = auto-detect
         "fpga": True,             # FPGA Builder (VHDL -> .bit -> board)
@@ -531,6 +538,163 @@ def rag_search(query: str, k: int = 5, group: str = "", semantic: bool = True, p
     return res
 
 
+def _assistant_mods():
+    ai = str(ROOT / "ai")
+    if ai not in sys.path:
+        sys.path.insert(0, ai)
+    from assistant import backend as AB, chat as AC
+    return AB, AC
+
+
+def assistant_backend():
+    AB, _ = _assistant_mods()
+    be = AB.from_features(CFG["features"])
+    if be.kind == "llama":      # Settings ▸ AI off points AI_ENDPOINT at a closed port: the chat says so
+        be.endpoint = os.environ.get("AI_ENDPOINT") or be.endpoint
+    return be
+
+
+_ASSIST = {"mem": None, "proxy": None}
+
+
+def assistant_memory():
+    """The memory store (<data>/assistant.sqlite), or None when Settings turned memory off."""
+    if not CFG["features"].get("assistant_memory", True):
+        return None
+    if _ASSIST["mem"] is None:
+        _assistant_mods()
+        from assistant import memory as AM
+        _ASSIST["mem"] = AM.Store(DATA_DIR / "assistant.sqlite")
+    return _ASSIST["mem"]
+
+
+def assistant_toolbox():
+    if _ASSIST.get("tools") is None:
+        _assistant_mods()
+        from assistant import tools as AT
+        _ASSIST["tools"] = AT.Toolbox(lambda q, k: (rag_search(q, k=k, semantic=llm.embed_running(),
+                                                                prefer_verified=False) or {}).get("hits") or [])
+    return _ASSIST["tools"]
+
+
+def assistant_augment(q: str) -> dict:
+    """What llama-ui's question gets from the app (proxy.Hooks.augment): the system prompt and the memories
+    that match it; with assistant_tools on (the default) the model looks up course notes, the app's part
+    library and how-tos itself (tools.py) — off, the course notes go in front of every question."""
+    if not CFG["features"].get("ai"):
+        return {}
+    _, AC = _assistant_mods()
+    from assistant import memory as AM
+    from assistant import tools as AT
+    use_tools = CFG["features"].get("assistant_tools", True)
+    parts, hits = [], []
+    if not use_tools and CFG["features"].get("assistant_notes", True):
+        try:
+            hits = (rag_search(q, k=AC.NOTES_K, semantic=llm.embed_running(), prefer_verified=False) or {}).get("hits") or []
+        except Exception:
+            hits = []
+    nb = AC.notes_block(hits)
+    if nb:
+        parts.append(nb)
+    store = assistant_memory()
+    if store is not None:
+        said = AM.explicit(q)
+        if said:
+            store.add(said, "fact")
+            parts.append(f"[ระบบ: บันทึกลงความจำแล้วว่า \"{said}\" — ตอบรับสั้น ๆ]")
+        mb = AM.block(store.search(q))
+        if mb:
+            parts.append(mb)
+    return {"system": AC.system(tools=use_tools), "prefix": "\n\n".join(parts) + ("\n\n[คำถาม]\n" if parts else ""),
+            "sources": AC.sources(hits), "tools": AT.SCHEMAS if use_tools else None,
+            "prefetch": AT.prefetch(q) if use_tools else []}
+
+
+def assistant_after(q: str, answer: str) -> None:
+    """After an answer in llama-ui: let the model pick what to remember from the user's message."""
+    store = assistant_memory()
+    if store is None:
+        return
+    from assistant import memory as AM
+    if AM.should_extract(q):
+        for it in AM.extract(assistant_backend(), q):
+            store.add(it["text"], it.get("kind") or "fact")
+
+
+def assistant_ui_start(port: int) -> None:
+    _assistant_mods()
+    from assistant import proxy as AP
+    up = lambda: (os.environ.get("AI_ENDPOINT") or CFG["features"]["llm_endpoint"]).split("/v1/", 1)[0]
+    def touch():        # llama-ui open = the app is in use (the watchdog quits after IDLE_SECONDS without)
+        global LAST_PING
+        LAST_PING = time.time()
+    from assistant import compact as ACP
+    count, n_ctx = ACP.server_hooks(up)
+    summarize = lambda sys_, text: assistant_backend().complete(
+        [{"role": "system", "content": sys_}, {"role": "user", "content": text}],
+        think=False, temperature=0.3, max_tokens=ACP.SUMMARY_TOKENS, timeout=300)["text"]
+    _ASSIST["compact"] = ACP.Compactor(summarize, count, n_ctx)
+    _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch,
+                                         lambda name, args, sources: assistant_toolbox().call(name, args, sources),
+                                         _ASSIST["compact"].apply, _ASSIST["compact"].command), port)
+
+
+def assistant_ui_url() -> str:
+    p = _ASSIST["proxy"]
+    return f"http://127.0.0.1:{p.server_address[1]}/" if p else ""
+
+
+def assistant_chat(data: dict, send) -> None:
+    """The chat's ถาม-ตอบ mode, streamed to `send(event) -> bool`: sources (course notes), then
+    think / text pieces as the model writes them, then done (or error). `send` returning False
+    (the page closed or pressed stop) closes the model request, and llama-server stops generating."""
+    q = str(data.get("message") or "").strip()
+    if not q:
+        send({"type": "error", "error": "empty message"})
+        return
+    if not CFG["features"].get("ai"):
+        send({"type": "error", "error": "ฟีเจอร์ AI ปิดอยู่ (เปิดได้ที่หน้า ตั้งค่า)"})
+        return
+    AB, AC = _assistant_mods()
+    hits = []
+    if data.get("notes", True):
+        try:        # semantic side only when the embedding server is already up: a question must not wait for it
+            hits = (rag_search(q, k=AC.NOTES_K, semantic=llm.embed_running(), prefer_verified=False) or {}).get("hits") or []
+        except Exception:
+            hits = []
+    if not send({"type": "sources", "sources": AC.sources(hits)}):
+        return
+    be = assistant_backend()
+    think = bool(data.get("think"))
+    max_tokens = int(data.get("max_tokens") or (6144 if think else 2048))
+    from assistant import memory as AM
+    store, mems = assistant_memory(), ""
+    if store is not None:
+        said = AM.explicit(q)
+        if said:
+            store.add(said, "fact")
+            mems = f"[ระบบ: บันทึกลงความจำแล้วว่า \"{said}\" — ตอบรับสั้น ๆ]\n\n"
+        mems += AM.block(store.search(q))
+    msgs = AC.messages(q, hits, str(data.get("sheet") or ""), data.get("history") or [], mems.strip())
+    t0 = time.time()
+    gen = be.stream(msgs, think=think, max_tokens=max_tokens)
+    answer = []
+    try:
+        for ev in gen:
+            if ev["type"] == "done":
+                ev = dict(ev, elapsed_s=round(time.time() - t0, 2), backend=be.kind)
+                threading.Thread(target=assistant_after, args=(q, "".join(answer)), daemon=True).start()
+            elif ev["type"] == "text":
+                answer.append(ev["text"])
+            if not send(ev):
+                return
+    except AB.BackendError as e:
+        send({"type": "error", "error": str(e), "hint": "เปิดโมเดลได้ที่ หน้าหลัก ▸ ตั้งค่า ▸ โมเดล AI",
+              "log_tail": llm.log_tail(12) if be.kind == "llama" else ""})
+    finally:
+        gen.close()
+
+
 def agent_log(rec: dict) -> dict:
     """Every agent run, one JSON line per run: material for examples (RAG) and for finding what goes wrong."""
     d = CONFIG_DIR / "agent-runs"
@@ -576,6 +740,7 @@ PAGES = {
     # Top-Down and the board build live inside Schematic Studio (one program, the circuit follows)
     "topdown": "/studio.html?view=topdown",
     "board": "/studio.html?view=board",
+    "assistant": "",        # llama-ui behind the assistant proxy (assistant_ui_url)
 }
 
 
@@ -586,6 +751,8 @@ def base_url() -> str:
 def open_window(page: str = "home", query: str = "") -> None:
     path = PAGES.get(page, "/")
     url = base_url() + path + ((("&" if "?" in path else "?") + query) if query else "")
+    if page == "assistant":
+        url = assistant_ui_url() or base_url() + "/"
     browser = find_browser()
     if browser:
         prof = CONFIG_DIR / "browser"
@@ -1331,6 +1498,14 @@ def make_handler():
                 server, model = detect_llama()
                 return self._out(200, dict(llm.status(CFG["features"]["llm_endpoint"], server, model),
                                            mode=CFG["features"].get("llm"), backend_up=llm_up()))
+            if path == "/api/assistant/status":
+                AB, _ = _assistant_mods()
+                be = assistant_backend()
+                return self._out(200, dict(be.probe(), ok=True, backend=be.kind, endpoint=be.endpoint, ui=assistant_ui_url(),
+                                           ollama_models=AB.ollama_models() if be.kind == "ollama" else []))
+            if path == "/api/assistant/memories":
+                store = assistant_memory()
+                return self._out(200, {"ok": True, "enabled": store is not None, "memories": store.all() if store else []})
             if path == "/api/setup/check":
                 return self._out(200, setup_check())
             if path == "/api/board/status":
@@ -1412,6 +1587,38 @@ def make_handler():
                 if path == "/api/llm/chat":
                     return self._out(200, llm_chat(data))
                 return self._out(404, {"ok": False, "error": "unknown api"})
+            if path == "/api/assistant/chat":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+
+                def send(ev):
+                    try:
+                        self.wfile.write(("data: " + json.dumps(ev, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                        return True
+                    except Exception:
+                        return False
+                assistant_chat(data, send)
+                self.close_connection = True
+                return
+            if path == "/api/assistant/memories":       # Settings ▸ สิ่งที่ AI จำ: add / edit / pin / delete / clear
+                if "enabled" in data:
+                    CFG["features"]["assistant_memory"] = bool(data["enabled"])
+                    save_config(CFG)
+                store = assistant_memory()
+                act = data.get("action")
+                if store is not None and act:
+                    if act == "add":
+                        store.add(str(data.get("text") or ""), str(data.get("kind") or "fact"))
+                    elif act == "update":
+                        store.update(int(data["id"]), data.get("text"), data.get("kind"), data.get("pinned"))
+                    elif act == "delete":
+                        store.delete(int(data["id"]))
+                    elif act == "clear":
+                        store.clear()
+                return self._out(200, {"ok": True, "enabled": store is not None, "memories": store.all() if store else []})
             if path.startswith("/api/agent/"):
                 import mcp_server as MS         # tool schemas + argument checks, shared with the MCP server
                 if path == "/api/agent/tools":
@@ -1597,6 +1804,10 @@ def main(argv=None):
         HTTPD = _bind(0)
     SERVER_PORT = HTTPD.server_address[1]
     write_runtime()
+    try:
+        assistant_ui_start(int(CFG["features"].get("assistant_port") or 8771))
+    except Exception:
+        traceback.print_exc()
     # a model server from our llama folder running now was left by an earlier run (closed by the updater,
     # a crash): it holds RAM / VRAM for nothing — stop it before anything else
     if not start_llama().get("ok"):                  # (a start stops them itself)
