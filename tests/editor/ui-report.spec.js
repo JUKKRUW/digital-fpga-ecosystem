@@ -46,3 +46,24 @@ test("VHDL block text is readable in the light theme; the pin page keeps its scr
   expect(r.bg).not.toBe(r.fg);
   expect(r.bg).toBe("rgb(255, 255, 255)");
 });
+
+test("sim page: ⚡ real time on a design with a clock divider; bus inputs on switches bit by bit (lab 9)", async ({ page }) => {
+  test.setTimeout(120000);
+  await openEditor(page);
+  const r = await page.evaluate(async () => {
+    await MCP_OPS.build_part({ kind: "clock_divider", sheet: "dv", params: { n: 50 } });
+    await MCP_OPS.build_hierarchy({ sheet: "alu", blocks: [{ name: "d", sheet: "dv" }], inputs: ["clk", "a[3:0]", "b"], outputs: ["tick", "y[3:0]"],
+      connect: [["clk", "d.clk_in"], ["d.clk_out", "tick"], ["a[0]", "y[0]"], ["a[1]", "y[1]"], ["a[2]", "y[2]"], ["a[3]", "y[3]"]] });
+    const s = Object.values(state.project.schematics).find(x => x.name === "alu");
+    s.pinmap = { clk: "clk", "a[0]": "sw:0", "a[1]": "sw:9", "a[2]": "sw:10", "a[3]": "sw:11", b: "sw:3" };
+    openSchTab(s.id); renderAll(); showSimPage();
+    await new Promise(res => setTimeout(res, 2500));
+    const out = { rt: !!document.querySelector('#simBoardMsg [data-act="rt-toggle"]'), bus: (SIM_SEQ.busBits || []).map(b => b.name + ":" + b.bits.map(x => x.bit + "@" + x.sw).join(",")) };
+    seqToggle(10); seqToggle(0);
+    out.a = SIM_SEQ.rows[SIM_SEQ.idx][1][SIM_SEQ.inputs.indexOf("a")];
+    return out;
+  });
+  expect(r.rt).toBe(true);
+  expect(r.bus).toEqual(["a:0@0,1@9,2@10,3@11"]);
+  expect(r.a).toBe(5);
+});
