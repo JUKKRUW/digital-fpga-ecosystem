@@ -14,10 +14,13 @@ const BOARD_PINS = (()=>{
   Object.entries({a:"L3",b:"P4",c:"P2",d:"M3",e:"M1",f:"J4",g:"K4",dp:"J2"}).forEach(([s,pin])=>p["seg:"+s]=pin);
   // the rest of the board (ai/board/edge_spartan7.xdc). LCD data and the SPI TFT share their pins
   // with LED 7…0 — the board doctor warns when two targets land on one package pin
+  // ADC: the board XDC names DIN / DOUT from the FPGA side (DIN = G4 = data INTO the FPGA = the
+  // MCP3208's DOUT). Our targets are the chip's pins: adc:din = FPGA → ADC = C1, adc:dout = ADC → FPGA = G4
+  // (checked on a real board: the other way round the ADC never answers).
   ["M4","L5","P11","N11","P13","M14","M12","K12"].forEach((pin,i)=>p["lcd:d"+i]=pin);
   Object.assign(p, {"lcd:rs":"M5", "lcd:e":"P5",
     "tft:sck":"N11", "tft:sdi":"P13", "tft:dc":"M14", "tft:reset":"M12", "tft:cs":"K12",
-    "adc:sck":"D1", "adc:cs":"F4", "adc:din":"G4", "adc:dout":"C1", "dac:sck":"F1", "dac:cs":"D2", "dac:mosi":"E2",
+    "adc:sck":"D1", "adc:cs":"F4", "adc:din":"C1", "adc:dout":"G4", "dac:sck":"F1", "dac:cs":"D2", "dac:mosi":"E2",
     "uart:txd":"F2", "uart:rxd":"G1", "wifi:txd":"A12", "wifi:rxd":"A10", "ble:txd":"F3", "ble:rxd":"D4",
     "audio:l":"A13", "audio:r":"B13", "ps2:clk":"E11", "ps2:data":"C12", "vga:hs":"C4", "vga:vs":"E4"});
   [["r",["B6","D3","C3","A4"]],["g",["A3","B3","A2","B5"]],["b",["A5","B2","B1","C5"]]].forEach(([c,L])=>L.forEach((pin,i)=>p["vga:"+c+i]=pin));

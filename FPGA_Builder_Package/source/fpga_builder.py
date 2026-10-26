@@ -114,7 +114,7 @@ _PIN_DESC_EDGE = {
     # Audio / PS2
     "A13": "AUDIO_L", "B13": "AUDIO_R", "E11": "PS2_CLOCK", "C12": "PS2_DATA",
     # SPI ADC (MCP3208: CH6=LDR, CH7=LM35) / DAC (MCP4921)
-    "D1": "ADC_SCK", "F4": "ADC_CS", "G4": "ADC_DIN", "C1": "ADC_DOUT",
+    "D1": "ADC_SCK", "F4": "ADC_CS", "G4": "ADC_DOUT", "C1": "ADC_DIN",   # MCP3208 pins (the board XDC names them from the FPGA side)
     "F1": "DAC_SCK", "D2": "DAC_CS", "E2": "DAC_DIN",
     # VGA 12-bit
     "C4": "VGA_HSYNC", "E4": "VGA_VSYNC",
