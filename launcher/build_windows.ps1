@@ -40,6 +40,10 @@ New-Item -ItemType Directory -Force (Join-Path $stage "ai\rag") | Out-Null
 Get-ChildItem ai\*.py | ForEach-Object { Stage $_.FullName ("ai\" + $_.Name) }
 foreach ($d in "grammar", "prompts", "board") { Stage "ai\$d" "ai\$d" }
 Get-ChildItem ai\rag\*.py | ForEach-Object { Stage $_.FullName ("ai\rag\" + $_.Name) }
+# the AI assistant (Home ▸ ผู้ช่วย AI, the editor's ถาม-ตอบ chat, Settings ▸ สิ่งที่ AI จำ): 2.8.x shipped without it,
+# the proxy never started and the button opened Home instead (tests/test_assistant.py checks this list)
+Get-ChildItem ai\assistant\*.py | ForEach-Object { Stage $_.FullName ("ai\assistant\" + $_.Name) }
+foreach ($f in "catalog.json", "app_guide.md") { Stage "ai\assistant\$f" "ai\assistant\$f" }
 Stage "ai\rag\labs" "ai\rag\labs"
 Stage "ai\rag\content" "ai\rag\content"
 # the RAG index is not in git: build it here (chapters + lab sheets + board + checked VHDL), so every
@@ -61,7 +65,8 @@ $hidden = "sqlite3", "hashlib", "html", "argparse", "tempfile", "copy", "itertoo
           "struct", "math", "datetime", "typing", "collections", "queue", "ctypes", "ctypes.wintypes",
           "tkinter", "tkinter.ttk", "tkinter.filedialog", "tkinter.messagebox", "tkinter.scrolledtext",
           "http.server", "urllib.request", "urllib.parse", "json", "glob", "shutil", "difflib",
-          "unicodedata", "textwrap", "csv", "random", "statistics", "fractions", "decimal"
+          "unicodedata", "textwrap", "csv", "random", "statistics", "fractions", "decimal",
+          "gzip", "zlib", "http.client", "urllib.error"
 $hiddenArgs = $hidden | ForEach-Object { "--hidden-import", $_ }
 # absolute: PyInstaller resolves --icon relative to --specpath (build\), not the cwd
 $icon = @()
