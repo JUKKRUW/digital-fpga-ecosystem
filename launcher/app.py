@@ -40,7 +40,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 APP_NAME = "FPGA Ecosystem"
 APP_ID = "fpga-ecosystem"
-VERSION = "2.8.3"
+VERSION = "2.8.4"
 
 FROZEN = getattr(sys, "frozen", False)
 # ROOT = where the bundled content lives (repo root in dev, _MEIPASS when frozen)
@@ -554,7 +554,7 @@ def assistant_backend():
     return be
 
 
-_ASSIST = {"mem": None, "proxy": None}
+_ASSIST = {"mem": None, "proxy": None, "error": ""}
 
 
 def assistant_memory():
@@ -637,6 +637,18 @@ def assistant_ui_start(port: int) -> None:
     _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch,
                                          lambda name, args, sources: assistant_toolbox().call(name, args, sources),
                                          _ASSIST["compact"].apply, _ASSIST["compact"].command), port)
+
+
+def assistant_ui_ensure() -> str:
+    """The assistant page's URL; starts the proxy now if it did not come up with the app (and says why not)."""
+    if not _ASSIST["proxy"]:
+        try:
+            assistant_ui_start(int(CFG["features"].get("assistant_port") or 8771))
+            _ASSIST["error"] = ""
+        except Exception as e:
+            traceback.print_exc()
+            _ASSIST["error"] = f"{type(e).__name__}: {e}"
+    return assistant_ui_url()
 
 
 def assistant_ui_url() -> str:
@@ -752,7 +764,9 @@ def open_window(page: str = "home", query: str = "") -> None:
     path = PAGES.get(page, "/")
     url = base_url() + path + ((("&" if "?" in path else "?") + query) if query else "")
     if page == "assistant":
-        url = assistant_ui_url() or base_url() + "/"
+        url = assistant_ui_ensure()
+        if not url:            # /api/open answers the error; Home shows it (it used to open Home again, silently)
+            return
     browser = find_browser()
     if browser:
         prof = CONFIG_DIR / "browser"
@@ -1552,7 +1566,11 @@ def make_handler():
                 return self._out(200, {"ok": True, "path": str(f), "project": proj, "name": name})
             data = json.loads(self._body() or b"{}")
             if path == "/api/open":
-                open_window(data.get("page", "home"), data.get("query", ""))
+                page = data.get("page", "home")
+                open_window(page, data.get("query", ""))
+                if page == "assistant" and not assistant_ui_url():
+                    return self._out(200, {"ok": False, "error": "เปิดผู้ช่วย AI ไม่ได้: " + (_ASSIST["error"] or "ตัวกลาง (proxy) ไม่ทำงาน")
+                                           + " — ดูรายละเอียดใน app.log ในโฟลเดอร์ตั้งค่า"})
                 return self._out(200, {"ok": True})
             if path == "/api/open_project":
                 rel = data.get("path") or ""
@@ -1804,10 +1822,7 @@ def main(argv=None):
         HTTPD = _bind(0)
     SERVER_PORT = HTTPD.server_address[1]
     write_runtime()
-    try:
-        assistant_ui_start(int(CFG["features"].get("assistant_port") or 8771))
-    except Exception:
-        traceback.print_exc()
+    assistant_ui_ensure()
     # a model server from our llama folder running now was left by an earlier run (closed by the updater,
     # a crash): it holds RAM / VRAM for nothing — stop it before anything else
     if not start_llama().get("ok"):                  # (a start stops them itself)

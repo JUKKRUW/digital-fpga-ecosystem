@@ -377,5 +377,28 @@ class Tools(unittest.TestCase):
             up.shutdown()
 
 
+
+class Installer(unittest.TestCase):
+    """2.8.x installers shipped without ai/assistant: the proxy never started and Home ▸ ผู้ช่วย AI opened Home again."""
+
+    def test_windows_build_stages_the_assistant(self):
+        ps1 = (ROOT / "launcher" / "build_windows.ps1").read_text(encoding="utf-8")
+        for pkg in sorted(p.parent.name for p in (ROOT / "ai").glob("*/__init__.py")):
+            self.assertIn("ai\\%s\\*.py" % pkg, ps1, "build_windows.ps1 does not stage ai\\%s" % pkg)
+        for f in ("catalog.json", "app_guide.md"):
+            self.assertTrue((ROOT / "ai" / "assistant" / f).exists())
+        self.assertIn('"catalog.json", "app_guide.md"', ps1)
+        # every stdlib module the assistant imports is bundled (the frozen app only has what PyInstaller saw)
+        import re
+        hidden = set(re.findall(r'"([a-z0-9_.]+)"', ps1.split("$hidden =", 1)[1].split("$hiddenArgs", 1)[0]))
+        used = set()
+        for py in (ROOT / "ai" / "assistant").glob("*.py"):
+            for m in re.finditer(r"^(?:import|from) ([a-z0-9_.]+)", py.read_text(encoding="utf-8"), re.M):
+                used.add(m.group(1))
+        stdlib_needed = {u for u in used if u.split(".")[0] in sys.stdlib_module_names and u not in ("__future__",)}
+        bundled_by_app = {"json", "re", "threading", "time", "pathlib", "os", "sys"}      # app.py imports these itself
+        self.assertEqual(sorted(stdlib_needed - hidden - bundled_by_app), [])
+
+
 if __name__ == "__main__":
     unittest.main()

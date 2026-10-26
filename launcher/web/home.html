@@ -268,7 +268,8 @@ function showTab(name){
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
-$$("[data-open]").forEach(b => b.onclick = () => api("/api/open", {page: b.dataset.open}));
+$$("[data-open]").forEach(b => b.onclick = () => api("/api/open", {page: b.dataset.open})
+  .then(j => { if (j && j.ok === false) toast(j.error || "เปิดไม่ได้"); }));
 $("#btnReveal").onclick = () => api("/api/reveal", {});
 $("#btnNew").onclick = async () => {
   const name = $("#newName").value.trim(); if(!name) return $("#newName").focus();
