@@ -104,8 +104,8 @@ data lines, the second row shares pins with 7-segment segments.
 | C12 | PS2_DATA | PS2 |
 | D1 | ADC_SCK | ADC (SPI, MCP3208; CH6=LDR, CH7=LM35) |
 | F4 | ADC_CS | ADC |
-| G4 | ADC_DIN | ADC |
-| C1 | ADC_DOUT | ADC |
+| G4 | ADC_DOUT (ADC → FPGA; the board XDC calls it DIN) | ADC |
+| C1 | ADC_DIN (FPGA → ADC; the board XDC calls it DOUT) | ADC |
 | F1 | DAC_SCK | DAC (SPI, MCP4921) |
 | D2 | DAC_CS | DAC |
 | E2 | DAC_DIN | DAC |

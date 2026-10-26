@@ -622,7 +622,7 @@
     "DIN": {
       "pin": "G4",
       "iostandard": "LVCMOS33",
-      "note": "",
+      "note": "FPGA input: MCP3208 DOUT (ADC -> FPGA). The board XDC names it from the FPGA side; editor target adc:dout",
       "group": "SPI ADC",
       "bus": "DIN",
       "index": null,
@@ -631,7 +631,7 @@
     "DOUT": {
       "pin": "C1",
       "iostandard": "LVCMOS33",
-      "note": "",
+      "note": "FPGA output: MCP3208 DIN (FPGA -> ADC). The board XDC names it from the FPGA side; editor target adc:din",
       "group": "SPI ADC",
       "bus": "DOUT",
       "index": null,
