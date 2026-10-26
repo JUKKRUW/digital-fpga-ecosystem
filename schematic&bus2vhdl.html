@@ -2508,13 +2508,14 @@ function schPortList(sch){
   const used = {};
   const uq = b => { let n = sanId(b)||"net", i=1; while(used[n]) n = sanId(b)+"_"+(i++); used[n]=1; return n; };
   const out = [];
-  /* PIN ORDER FOLLOWS THE DRAWING. The pins used to come out in the order the IN/OUT
+  /* DEFAULT PIN ORDER FOLLOWS THE DRAWING. The pins used to come out in the order the IN/OUT
      blocks happened to be CREATED in — a sequence that is invisible on screen, so a
      block ended up with its pins in an order nobody chose (sel0, sel1, sel3 landing
      between in7 and in8, sel2 at the very bottom). Sorting by position instead makes
      the layout the control: arrange the port blocks on the sub-sheet top to bottom the
      way you want them on the symbol, and the symbol follows. Ids are unaffected, so
-     nothing a parent has wired comes loose — the pins only move. */
+     nothing a parent has wired comes loose — the pins only move. An explicit symbol
+     order is applied below without moving anything inside the sub-sheet. */
   const byPos0 = (a,b) => (a.y - b.y) || (a.x - b.x);
   // a generated sheet (sch.portOrder) keeps its declared order — q0..q3, not whatever the
   // router's straight-line alignment left them in; hand-drawn sheets follow the drawing
@@ -2525,7 +2526,14 @@ function schPortList(sch){
     .forEach(c=>out.push({cid:c.id, id:uq(c.params.name||"in"),  name:c.params.name, dir:"in",  width:c.params.width||1}));
   (sch.components||[]).filter(c=>c.type==="OUT").slice().sort(byPos)
     .forEach(c=>out.push({cid:c.id, id:uq(c.params.name||"out"), name:c.params.name, dir:"out", width:c.params.width||1}));
-  return out;
+  // Apply the symbol's explicit order AFTER assigning ids, so even duplicate/sanitised
+  // names keep the same pin ids. Internal placement and generated portOrder stay intact.
+  return ["in", "out"].flatMap(dir=>{
+    const side=out.filter(p=>p.dir===dir), order=sch.symbolPinOrder && sch.symbolPinOrder[dir];
+    if(!Array.isArray(order)) return side;
+    const rank=new Map(order.map((cid,i)=>[cid,i]));
+    return side.sort((a,b)=>(rank.get(a.cid)??order.length)-(rank.get(b.cid)??order.length));
+  });
 }
 /* Block width that never lets a centred name overlap the edge-anchored pin labels:
    name width + the widest in-label + the widest out-label + padding, snapped to grid
@@ -3464,40 +3472,25 @@ function autoWireBlockPorts(block){
   toast(`สร้างขา + ต่อสายให้ ${made} ขา (ชื่อตรงกับขาโมดูล)`,"ok",3200);
 }
 /* The sub-schematic a SCH:/CUSTOM: block draws its symbol from (null for a leaf/old-format
-   custom). Its IN/OUT blocks' top-to-bottom order IS the symbol's pin order (schPortList). */
+   custom). schPortList combines its default port order with any explicit symbol order. */
 function subSchOf(block){
   if(!block||typeof block.type!=="string") return null;
   if(block.type.indexOf("SCH:")===0) return state.project.schematics[block.type.slice(4)]||null;
   if(block.type.indexOf("CUSTOM:")===0){ const cc=state.project.customs[block.type.slice(7)]; return (cc&&cc.schematic)||null; }
   return null;
 }
-/* #3 — reorder module pins from the SYMBOL by drag-and-drop. Pin order follows the sub-sheet
-   IN/OUT blocks' y (schPortList), so we just rewrite which block sits in which SLOT: capture the
-   current (x,y) slots of one side's port blocks (already in symbol order), then drop each block
-   into the slot at its new index. Pin IDS are name-derived, not order-derived, so every wire the
-   parent drew stays connected — only the pin's height on the symbol changes. `dir` = "in"/"out",
-   `orderedPids` = the pids of that side in the desired top-to-bottom order. */
+/* Reorder only the module SYMBOL. Store port component ids separately from internal
+   placement and generated portOrder; no internal blocks or wires need to move.
+   `orderedPids` is a permutation of one side's current pin ids. */
 function reorderSubPins(block, dir, orderedPids){
+  if((dir!=="in" && dir!=="out") || !Array.isArray(orderedPids)) return false;
   const sub=subSchOf(block); if(!sub) return false;
   const side=schPortList(sub).filter(p=>p.dir===dir);
   const cidByPid=new Map(side.map(p=>[p.id,p.cid]));
-  const blocks=side.map(p=>sub.components.find(c=>c.id===p.cid)).filter(Boolean);
-  if(blocks.length!==side.length) return false;
-  const slots=blocks.map(b=>({x:b.x, y:b.y}));      // current positions, in symbol order
   const newCids=orderedPids.map(pid=>cidByPid.get(pid)).filter(Boolean);
-  if(newCids.length!==blocks.length || new Set(newCids).size!==blocks.length) return false;  // must be a permutation
-  if(newCids.every((cid,i)=>cid===blocks[i].id)) return false;                                // no change
-  newCids.forEach((cid,i)=>{ const b=sub.components.find(c=>c.id===cid); if(b){ b.x=slots[i].x; b.y=slots[i].y; } });
-  // a generated sheet lists its pins in sub.portOrder, which schPortList reads before positions: the
-  // blocks moved but the symbol kept its order (the drag looked like it did nothing) — keep both in step
-  const k=dir==="in"?"in":"out";
-  if(sub.portOrder && Array.isArray(sub.portOrder[k])){
-    const names=newCids.map(cid=>(sub.components.find(c=>c.id===cid)||{params:{}}).params.name);
-    sub.portOrder[k]=names.concat(sub.portOrder[k].filter(n=>!names.includes(n)));
-  }
-  // the wires on the moved port blocks still ran to the old spots (a locked sheet is not healed): re-route them
-  if(typeof wtReroute==="function"){ const moved=new Set(newCids);
-    try{ wtReroute(sub, new Set(sub.wires.filter(w=>moved.has(w.from.cid)||moved.has(w.to.cid)).map(w=>w.id))); }catch(e){ console.warn("reorder re-route", e); } }
+  if(orderedPids.length!==side.length || newCids.length!==side.length || new Set(newCids).size!==side.length) return false;
+  if(newCids.every((cid,i)=>cid===side[i].cid)) return false;
+  sub.symbolPinOrder=Object.assign({}, sub.symbolPinOrder, {[dir]:newCids});
   snapshot(); renderAll();
   return true;
 }
