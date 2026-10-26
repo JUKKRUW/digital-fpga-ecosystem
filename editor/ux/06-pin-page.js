@@ -5,10 +5,21 @@
    every port of the sheet's VHDL entity — buses split into bits — and every pin the
    board has, independent of whether the sheet can be simulated.
    ========================================================================= */
-const PIN_IN_TARGETS  = [...Array.from({length:16},(_,i)=>"sw:"+i), ...Array.from({length:5},(_,i)=>"pb:"+i), "clk"];
+/* the board's targets by what they can do: in only (switches, buttons, clock, the ADC's data
+   out), out only (LEDs, 7-seg, buzzer, LCD, TFT, VGA, audio, DAC / ADC control), both (serial
+   links, PS/2, the J5 header) */
+const PIN_EXTRA_OUT=[...Array.from({length:8},(_,i)=>"lcd:d"+i), "lcd:rs", "lcd:e",
+  "tft:sck","tft:sdi","tft:dc","tft:reset","tft:cs", "vga:hs","vga:vs", ..."rgb".split("").flatMap(c=>[0,1,2,3].map(i=>"vga:"+c+i)),
+  "audio:l","audio:r", "dac:sck","dac:cs","dac:mosi", "adc:sck","adc:cs","adc:din"];
+const PIN_EXTRA_IO=["uart:txd","uart:rxd","wifi:txd","wifi:rxd","ble:txd","ble:rxd","ps2:clk","ps2:data", ...Array.from({length:16},(_,i)=>"j5:"+(i+5))];
+const PIN_IN_TARGETS  = [...Array.from({length:16},(_,i)=>"sw:"+i), ...Array.from({length:5},(_,i)=>"pb:"+i), "clk", "adc:dout", ...PIN_EXTRA_IO];
 const PIN_OUT_TARGETS = [...Array.from({length:16},(_,i)=>"led:"+i), ..."abcdefg".split("").map(s=>"seg:"+s), "seg:dp",
-                         ...Array.from({length:4},(_,i)=>"an:"+i), "buzzer"];
+                         ...Array.from({length:4},(_,i)=>"an:"+i), "buzzer", ...PIN_EXTRA_OUT, ...PIN_EXTRA_IO];
 const PB_NAMES = ["บน","ล่าง","ซ้าย","ขวา","กลาง"];
+const PIN_GROUPS = {sw:"สวิตช์", pb:"ปุ่มกด", clk:"นาฬิกา", led:"LED", seg:"7-segment", an:"7-segment", buzzer:"Buzzer / เสียง", audio:"Buzzer / เสียง",
+  lcd:"จอ LCD 16×2", tft:"จอ TFT 1.8\" (SPI)", vga:"VGA", adc:"ADC / DAC (SPI)", dac:"ADC / DAC (SPI)",
+  uart:"สื่อสาร (UART / WiFi / BLE / PS2)", wifi:"สื่อสาร (UART / WiFi / BLE / PS2)", ble:"สื่อสาร (UART / WiFi / BLE / PS2)", ps2:"สื่อสาร (UART / WiFi / BLE / PS2)",
+  j5:"ขา header J5"};
 function pinOptLabel(t){
   const pin=BOARD_PINS[t]||"?", [k,v]=t.split(":");
   if(t==="clk") return `นาฬิกา 50 MHz · ${pin}`;
@@ -18,7 +29,15 @@ function pinOptLabel(t){
   if(k==="seg") return `7-seg ${v==="dp"?"จุด (dp)":v} · ${pin}`;
   if(k==="an") return `เลือกหลัก ${v} · ${pin}`;
   if(t==="buzzer") return `Buzzer · ${pin}`;
-  return t;
+  if(k==="lcd") return `LCD ${v==="rs"?"RS":v==="e"?"E (enable)":"data "+v.slice(1)} · ${pin}`;
+  if(k==="j5") return `J5 ขา ${v} · ${pin}`;
+  if(k==="vga") return `VGA ${v==="hs"?"HSYNC":v==="vs"?"VSYNC":v[0].toUpperCase()+"["+v.slice(1)+"]"} · ${pin}`;
+  return `${k.toUpperCase()} ${v.toUpperCase()} · ${pin}`;
+}
+/* <option>s grouped like the board (sw / buttons / LCD / …); `extra(t)` adds a note */
+function pinOptGroups(list, cur, extra){
+  const by=new Map(); list.forEach(t=>{ const g=PIN_GROUPS[t.split(":")[0]]||"อื่นๆ"; if(!by.has(g)) by.set(g,[]); by.get(g).push(t); });
+  return [...by].map(([g,L])=>`<optgroup label="${esc(g)}">`+L.map(t=>`<option value="${t}" ${t===cur?"selected":""}>${esc(pinOptLabel(t))}${extra?extra(t):""}</option>`).join("")+"</optgroup>").join("");
 }
 /* every bit the entity exposes: {key, port, bit, dir, vhdl} · key = "a" or "d[3]" (what sch.pinmap stores) */
 function uxPortBits(sch){
@@ -39,8 +58,16 @@ function uxGuessTarget(b, used){
   if(b.dir==="in"){
     if(/^(clk|clock|clk_?50m?|sys_?clk)$/.test(n)) t="clk";
     else if(/^(rst|reset|btn|pb|key)/.test(n)){ for(let i=4;i>=0&&!t;i--) t=free("pb:"+i); }
+    else if(/^(uart_?)?rx(d)?$/.test(n)) t=free("uart:rxd");
   } else {
     let m;
+    if(/^lcd_?rs$|^rs$/.test(n)) t=free("lcd:rs");
+    else if(/^lcd_?(e|en|enable)$/.test(n)) t=free("lcd:e");
+    else if(/^lcd_?(data|d|db)?$/.test(n) && b.bit!=null && b.width<=8) t=free("lcd:d"+b.bit);
+    else if(/^(uart_?)?tx(d)?$/.test(n)) t=free("uart:txd");
+    else if(/^(h_?sync|vga_?hs(ync)?)$/.test(n)) t=free("vga:hs");
+    else if(/^(v_?sync|vga_?vs(ync)?)$/.test(n)) t=free("vga:vs");
+    if(t) return t;
     // bus on the 7-seg: top bit = a (the board's own Seven_Segment[7]=A … [0]=DP convention)
     if(/^(seg|seven|sseg|hex)/.test(n) && b.bit!=null){ const L=["a","b","c","d","e","f","g","dp"][b.width-1-b.bit]; t=(L&&b.width<=8)?free("seg:"+L):null; }
     else if((m=n.match(/^seg_?([a-g]|dp)$/))||(m=n.match(/^([a-g]|dp)$/))) t=free("seg:"+m[1]);
@@ -71,17 +98,30 @@ function uxSyncSimPinmap(){
   if(SIM_REDRAW) try{ SIM_REDRAW(); }catch(_){}
 }
 function uxRenderPinPage(){
+  const host=$("#simPinPicker"); if(!host) return;
+  // re-drawing the table jumped a long page back to the top after each pick: keep every scroll position
+  const kept=[]; for(let el=host; el; el=el.parentElement) if(el.scrollTop) kept.push([el, el.scrollTop]);
+  const inner=host.querySelector(".pp-wrap"), innerTop=inner?inner.scrollTop:0, winY=window.scrollY;
+  try{ return uxRenderPinPageInner(); }
+  finally{ kept.forEach(([el,t])=>{ el.scrollTop=t; }); const w=host.querySelector(".pp-wrap"); if(w) w.scrollTop=innerTop;
+    if(window.scrollY!==winY) window.scrollTo(window.scrollX, winY); }
+}
+function uxRenderPinPageInner(){
   const host=$("#simPinPicker"), sch=activeSch(); if(!host||!sch) return;
   uxNormPinmap(sch);
   const bits=uxPortBits(sch), own=sch.pinmap||{};
   const top=state.project.schematics[state.project.topId];
   const count={}; bits.forEach(b=>{ const t=own[b.key]; if(t) count[t]=(count[t]||0)+1; });
-  const opt=(list,cur)=>'<option value="">— ไม่ต่อขา —</option>'+list.map(t=>`<option value="${t}" ${t===cur?"selected":""}>${esc(pinOptLabel(t))}${count[t]&&t!==cur?" (ใช้แล้ว)":""}</option>`).join("");
+  // a package pin taken by another target (LCD data = LED 7…0) counts as used too
+  const byPin={}; Object.entries(count).forEach(([t,n])=>{ const p=BOARD_PINS[t]; if(p) byPin[p]=(byPin[p]||0)+n; });
+  const opt=(list,cur)=>'<option value="">— ไม่ต่อขา —</option>'+pinOptGroups(list, cur, t=>t===cur?"":count[t]?" (ใช้แล้ว)":byPin[BOARD_PINS[t]]?" (ขาเดียวกับที่ใช้แล้ว)":"");
   const busOpt=(dir,w)=>{   // one choice fills the whole bus with consecutive pins
     const pool=dir==="in"?["sw"]:["led"], o=[];
     pool.forEach(k=>{ for(let s=0;s+w<=16;s+=(w<=4?4:8)) o.push(`<option value="${k}:${s}">${k==="sw"?"SW":"LED"} ${s+w-1}…${s}</option>`); });
     if(dir==="out"&&(w===7||w===8)){ o.push(`<option value="seg-a">7-seg a…g${w===8?",dp":""} (บิตบนสุด = a)</option>`); o.push(`<option value="seg-g">7-seg ${w===8?"dp,":""}g…a (บิต 0 = a)</option>`); }
     if(dir==="out"&&w===4) o.push('<option value="an">เลือกหลัก 3…0</option>');
+    if(dir==="out"&&w===8) o.push('<option value="lcd:d">LCD data 7…0</option>');
+    if(dir==="out"&&w===4) ["r","g","b"].forEach(c=>o.push(`<option value="vga:${c}">VGA ${c.toUpperCase()}[3:0]</option>`));
     return '<option value="">ตั้งทั้งบัส…</option>'+o.join("");
   };
   let rows="", lastPort=null;
@@ -118,6 +158,8 @@ function uxRenderPinPage(){
     for(let i=0;i<w;i++){ let t;
       if(v==="seg-a"||v==="seg-g"){ const L=["a","b","c","d","e","f","g","dp"]; t="seg:"+(v==="seg-a"?L[w-1-i]:L[i]); }
       else if(v==="an") t="an:"+i;
+      else if(v==="lcd:d") t="lcd:d"+i;
+      else if(/^vga:[rgb]$/.test(v)) t=v+i;
       else { const [k,s0]=v.split(":"); t=k+":"+(+s0+i); }
       sch.pinmap[`${port}[${i}]`]=t; }
     commit(); });
@@ -160,7 +202,8 @@ uxXdcBody=function(){
       // the label on its OWN line: XDC is Tcl, where `#` starts a comment only at the start of a
       // command — "[get_ports x]   ## SW 0" hands "##", "SW", "0" to set_property as arguments,
       // the command fails and Vivado ends with every port unconstrained (NSTD-1 / UCIO-1)
-      x+=`## ${pinTargetLabel(t)}\nset_property -dict {PACKAGE_PIN ${BOARD_PINS[t]||"?"} IOSTANDARD LVCMOS33} [get_ports ${port}]\n`;
+      // push buttons: PULLDOWN as in the board's XDC — without it a released button floats
+      x+=`## ${pinTargetLabel(t)}\nset_property -dict {PACKAGE_PIN ${BOARD_PINS[t]||"?"} IOSTANDARD LVCMOS33${/^pb:/.test(t)?" PULLDOWN true":""}} [get_ports ${port}]\n`;
       if(t==="clk" && !clk){ clk=true; x+=`create_clock -period 20.000 -name sys_clk [get_ports ${port}]\n`; } });
     x+="\n"; });
   UX.xdcMissing=miss;

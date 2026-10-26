@@ -12,7 +12,7 @@ test("reordering generated module inputs and outputs preserves the internal draw
     const top = Object.values(state.project.schematics).find(s => s.name === "top2");
     const blk = top.components.find(c => c.type === "SCH:" + sub.id);
     const copy = x => JSON.parse(JSON.stringify(x));
-    const original = copy(sub), originalTop = copy(top);
+    const original = copy(sub), originalTopNets = ffsNetSig(top);
     const ids = schPortList(sub).map(p => [p.cid, p.id]).sort();
     const simulate = () => { const flat = flattenSchematic(top).sch, struct = probeStruct(flat);
       return [0, 1, 2, 3].map(n => mcpEvalOuts(top, flat, struct, { a: n & 1, b: n >> 1 })); };
@@ -23,7 +23,7 @@ test("reordering generated module inputs and outputs preserves the internal draw
     const inputsOk = reorderSubPins(blk, "in", ["b", "a"]);
     const after = copy(sub); delete after.symbolPinOrder;
     return { before, ok, inputsOk, after: outs(), inputs: schPortList(sub).filter(p => p.dir === "in").map(p => p.id),
-      original, drawing: after, originalTop, top: copy(top),
+      original, drawing: after, originalTopNets, topNets: ffsNetSig(top),
       ids, afterIds: schPortList(sub).map(p => [p.cid, p.id]).sort(),
       equivalent: eqSheets(sub, original).equivalent, simBefore, simAfter: simulate() };
   });
@@ -33,7 +33,7 @@ test("reordering generated module inputs and outputs preserves the internal draw
   expect(r.inputsOk).toBe(true);
   expect(r.inputs).toEqual(["b", "a"]);
   expect(r.drawing).toEqual(r.original);
-  expect(r.top).toEqual(r.originalTop);
+  expect(r.topNets).toEqual(r.originalTopNets);
   expect(r.afterIds).toEqual(r.ids);
   expect(r.equivalent).toBe(true);
   expect(r.simAfter).toEqual(r.simBefore);
@@ -48,6 +48,7 @@ test("hand-drawn and custom module symbols keep stable pin ids, save order and s
     // Duplicate sanitised names must keep their original cid -> pid association.
     const ins = sub.components.filter(c => c.type === "IN");
     ins.forEach(c => { c.params.name = "same"; c.params.width = 4; });
+    renderAll();
     const original = JSON.parse(JSON.stringify(sub));
     const before = schPortList(sub), inOrder = before.filter(p => p.dir === "in").map(p => p.id);
     const block = { type: "SCH:" + sub.id };

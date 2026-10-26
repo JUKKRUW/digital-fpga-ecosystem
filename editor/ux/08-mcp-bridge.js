@@ -862,10 +862,26 @@ async function mcpLoop(){
     // an op that only WAITS (for the user's click, a Vivado build, the chat) runs beside the others:
     // it used to hold the queue for up to 40 s, and a simulate sent meanwhile timed out
     if(MCP_WAITING_OPS.has(job.op)){ mcpRun(job, false); continue; }
-    await mcpRun(job, true);
+    await mcpRunGuarded(job);
   }
 }
 const MCP_WAITING_OPS = new Set(["ai_chat_status", "ai_chat_stop", "approval_status", "board_status", "get_events"]);
+/* an op that awaits something that never comes (a model call on a machine out of RAM, a fetch with no answer)
+   held the whole queue — every later call "did not pick up" for ~30 min and only a reload freed it. Past its
+   caller's timeout (+30 s) the queue moves on: the caller gets an error now, the op may still finish later. */
+async function mcpRunGuarded(job){
+  const lim=Math.max(30, +job.timeout||60)+30;
+  let timer=null;
+  const late=new Promise(res=>{ timer=setTimeout(()=>res("late"), lim*1000); });
+  const r=await Promise.race([mcpRun(job, true).then(()=>"done"), late]);
+  clearTimeout(timer);
+  if(r!=="late") return;
+  MCPB.busy=false;
+  console.warn("mcp op still running after", lim, "s — queue released:", job.op);
+  try{ await fetch("/api/mcp/result", {method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id:job.id, ok:false, error:`'${job.op}' did not finish within ${lim} s — the editor moved on to the next call`,
+      hint:"it may still finish in the background; check the sheet (get_state) before calling it again"})}); }catch(_){}
+}
 async function mcpRun(job, edits){
   let reply;
   if(edits){ MCPB.busy=true; mcpRevealFlush(); }

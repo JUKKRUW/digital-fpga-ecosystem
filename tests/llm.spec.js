@@ -201,7 +201,7 @@ test("agent mode: the local model works through the tools; Claude drives the cha
     expect(st.data, st.text).not.toBe(null);
     expect(st.data.state).toBe("ready");
     expect(st.data.catalog.find(m => m.installed).id).toBe("qwen3.5-9b");
-    expect(fs.readFileSync(bin + ".args", "utf-8")).toBe(`-m ${path.join(home, ".local", "share", "fpga-ecosystem", "models", "Qwen3.5-9B-Q4_K_M.gguf")} --host 127.0.0.1 --port ${LPORT} -c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 1024`);
+    expect(fs.readFileSync(bin + ".args", "utf-8")).toBe(`-m ${path.join(home, ".local", "share", "fpga-ecosystem", "models", "Qwen3.5-9B-Q4_K_M.gguf")} --host 127.0.0.1 --port ${LPORT} -c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256 -fitt 512`);
     const go = await tool("ai_chat", { message: "ทำวงจร sum กับ carry ของ a และ b ให้หน่อย", mode: "agent" });
     expect(go.error, go.text).toBe(false);
     let s = await tool("ai_chat_status", { wait: 30 });
@@ -337,7 +337,7 @@ test("agent mode: the local model works through the tools; Claude drives the cha
     fs.writeFileSync(path.join(home, ".local", "share", "fpga-ecosystem", "models", "Qwen3.5-4B-Q6_K.gguf"), "GGUF");
     let m = await tool("ai_model", { action: "start", model: "qwen3.5-4b", wait: 20 });
     expect(m.data.model).toMatch(/4B/);
-    await tool("ai_chat", { message: "ต่อสาย STALL อีกรอบ", mode: "agent" });
+    await tool("ai_chat", { message: "ต่อสาย STALL อีกรอบ", mode: "agent", escalate: true });
     for (let k = 0; k < 4; k++) { s = await tool("ai_chat_status", { wait: 40 }); if (s.data.state === "done") break; }
     expect(s.data.agent.escalated, JSON.stringify(s.data.agent.steps.filter(x => x.kind))).toEqual({ from: "qwen3.5-4b", to: "qwen3.5-9b", back: expect.stringMatching(/4B/) });
     expect(s.data.agent.steps.some(x => x.kind === "escalate")).toBe(true);

@@ -1,0 +1,1772 @@
+{
+ "categories": [
+  "เครื่องมือออกแบบ",
+  "บวก / ลบ / คูณ / หาร",
+  "ALU",
+  "เปรียบเทียบ / ตรวจสอบ",
+  "MUX / DEMUX / Decoder / Encoder",
+  "แปลงรหัส",
+  "ASCII / ตัวอักษร",
+  "จอ 7-segment",
+  "ไฟ LED / PWM",
+  "Flip-flop / Register",
+  "ตัวนับ",
+  "นาฬิกา / หารความถี่",
+  "ปุ่มกด / ขอบสัญญาณ",
+  "เสียง / โน้ตดนตรี",
+  "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
+  "ระบบทั้งแลป"
+ ],
+ "parts": [
+  {
+   "kind": "half_adder",
+   "label": "Half adder",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "sum = a⊕b, carry = a·b",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "b"
+    ],
+    "out": [
+     "sum",
+     "carry"
+    ]
+   }
+  },
+  {
+   "kind": "full_adder",
+   "label": "Full adder",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "sum = a⊕b⊕cin, cout = a·b + cin·(a⊕b) — XOR/AND/OR แบบในตำรา",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "b",
+     "cin"
+    ],
+    "out": [
+     "sum",
+     "cout"
+    ]
+   }
+  },
+  {
+   "kind": "half_subtractor",
+   "label": "Half subtractor",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "diff = a⊕b, borrow = a'·b",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "b"
+    ],
+    "out": [
+     "diff",
+     "borrow"
+    ]
+   }
+  },
+  {
+   "kind": "full_subtractor",
+   "label": "Full subtractor",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "a − b − bin → diff, bout",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "b",
+     "bin"
+    ],
+    "out": [
+     "diff",
+     "bout"
+    ]
+   }
+  },
+  {
+   "kind": "adder",
+   "label": "ตัวบวก N บิต (ripple carry)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "s = a + b + cin, cout = บิตทด · n = 1..8 · cin:false = ไม่มีขา cin",
+   "params": {
+    "n": "1..8",
+    "cin": "true/false",
+    "blocks": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[3:0]",
+     "b[3:0]",
+     "cin"
+    ],
+    "out": [
+     "s[3:0]",
+     "cout"
+    ]
+   }
+  },
+  {
+   "kind": "subtractor",
+   "label": "ตัวลบ N บิต",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "d = a − b (a + b' + 1), bout = 1 เมื่อ a < b · n = 1..8",
+   "params": {
+    "n": "1..8",
+    "blocks": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[3:0]",
+     "b[3:0]"
+    ],
+    "out": [
+     "d[3:0]",
+     "bout"
+    ]
+   }
+  },
+  {
+   "kind": "comparator",
+   "label": "ตัวเปรียบเทียบ N บิต",
+   "category": "เปรียบเทียบ / ตรวจสอบ",
+   "description": "eq (a=b), gt (a>b), lt (a<b) — จากบิตสูงลงต่ำแบบในตำรา · n = 1..8",
+   "params": {
+    "n": "1..8",
+    "blocks": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[3:0]",
+     "b[3:0]"
+    ],
+    "out": [
+     "eq",
+     "gt",
+     "lt"
+    ]
+   }
+  },
+  {
+   "kind": "mux",
+   "label": "MUX N:1",
+   "category": "MUX / DEMUX / Decoder / Encoder",
+   "description": "y = d[s] · n = 2, 4, 8 ขาข้อมูล (s0 = บิตต่ำ)",
+   "params": {
+    "n": [
+     2,
+     4,
+     8
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "d[3:0]",
+     "s[1:0]"
+    ],
+    "out": [
+     "y"
+    ]
+   }
+  },
+  {
+   "kind": "demux",
+   "label": "DEMUX 1:N",
+   "category": "MUX / DEMUX / Decoder / Encoder",
+   "description": "y[s] = d, ขาอื่น 0 · n = 2, 4, 8",
+   "params": {
+    "n": [
+     2,
+     4,
+     8
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "d",
+     "s[1:0]"
+    ],
+    "out": [
+     "y[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "decoder",
+   "label": "Decoder n→2ⁿ",
+   "category": "MUX / DEMUX / Decoder / Encoder",
+   "description": "y[a] = 1 ขาเดียว (active-high) · n = 1..4 · en:true เพิ่มขา enable",
+   "params": {
+    "n": "1..4",
+    "en": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[2:0]"
+    ],
+    "out": [
+     "y[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "encoder",
+   "label": "Priority encoder",
+   "category": "MUX / DEMUX / Decoder / Encoder",
+   "description": "a = ตำแหน่ง d ที่สูงสุดที่เป็น 1, v = มีขาใดเป็น 1 · n = 4, 8",
+   "params": {
+    "n": [
+     4,
+     8
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "d[3:0]"
+    ],
+    "out": [
+     "a[1:0]",
+     "v"
+    ]
+   }
+  },
+  {
+   "kind": "bcd_7seg",
+   "label": "BCD → 7-segment",
+   "category": "จอ 7-segment",
+   "description": "b (4 บิต) → a..g · active_low:true สำหรับบอร์ด EDGE (common anode) · 10–15 ไม่สนใจ",
+   "params": {
+    "active_low": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "b[3:0]"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g"
+    ]
+   }
+  },
+  {
+   "kind": "parity",
+   "label": "Parity generator",
+   "category": "เปรียบเทียบ / ตรวจสอบ",
+   "description": "p = XOR ทุกบิต (even: รวม p แล้วมี 1 เป็นคู่) · odd:true กลับ · n = 2..8",
+   "params": {
+    "n": "2..8",
+    "odd": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "d[3:0]"
+    ],
+    "out": [
+     "p"
+    ]
+   }
+  },
+  {
+   "kind": "majority",
+   "label": "Majority (3 อินพุต)",
+   "category": "เปรียบเทียบ / ตรวจสอบ",
+   "description": "y = 1 เมื่อ 1 อย่างน้อย 2 ใน 3",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "b",
+     "c"
+    ],
+    "out": [
+     "y"
+    ]
+   }
+  },
+  {
+   "kind": "mod_counter",
+   "label": "ตัวนับ mod-N (D-FF, synchronous)",
+   "category": "ตัวนับ",
+   "description": "q นับ 0 … N−1 แล้ววน · N = 2..64 · ขา clk",
+   "params": {
+    "n": "2..64"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "bcd_counter",
+   "label": "ตัวนับ BCD (0–9)",
+   "category": "ตัวนับ",
+   "description": "mod-10 · q[3:0]",
+   "params": {},
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "jk_counter",
+   "label": "ตัวนับ/หารความถี่ JK-FF",
+   "category": "ตัวนับ",
+   "description": "synchronous JK-FF mod-N แบบในแลป · output:'q' = ออกทุกบิต, ไม่ใส่ = clk_out (บิตสูงสุด) · N = 2..64",
+   "params": {
+    "n": "2..64",
+    "output": [
+     "clk_out",
+     "q"
+    ]
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk_in"
+    ],
+    "out": [
+     "clk_out"
+    ]
+   }
+  },
+  {
+   "kind": "binary_counter",
+   "label": "ตัวนับไบนารี (ripple)",
+   "category": "ตัวนับ",
+   "description": "นับขึ้น 0 … 2ⁿ−1 · T-FF ต่อแบบ ripple · n = 1..8 บิต",
+   "params": {
+    "n": "1..8"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "clock_divider",
+   "label": "หารความถี่ ÷N",
+   "category": "นาฬิกา / หารความถี่",
+   "description": "clk_out = clk_in / N (N คู่ = duty 50%) · N = 2 … 2³¹ เช่น 50 MHz → 1 Hz = 50000000",
+   "params": {
+    "n": "2..2147483648"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk_in"
+    ],
+    "out": [
+     "clk_out"
+    ]
+   }
+  },
+  {
+   "kind": "shift_register",
+   "label": "Shift register",
+   "category": "Flip-flop / Register",
+   "description": "sin เลื่อนเข้าทีละ clock: q0 ← sin, q1 ← q0 … · n = 1..16",
+   "params": {
+    "n": "1..16"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "sin"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "register",
+   "label": "Register N บิต",
+   "category": "Flip-flop / Register",
+   "description": "q ← d ทุกขอบขาขึ้นของ clk · n = 2..16",
+   "params": {
+    "n": "2..16"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "d[3:0]"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "toggle",
+   "label": "Toggle (T flip-flop)",
+   "category": "Flip-flop / Register",
+   "description": "q กลับค่าทุกครั้งที่ btn มีขอบขาขึ้น (กดปุ่ม = เปิด/ปิด)",
+   "params": {},
+   "sequential": true,
+   "ports": {
+    "in": [
+     "btn"
+    ],
+    "out": [
+     "q"
+    ]
+   }
+  },
+  {
+   "kind": "edge_detector",
+   "label": "ตัวจับขอบขาขึ้น",
+   "category": "ปุ่มกด / ขอบสัญญาณ",
+   "description": "pulse = 1 หนึ่ง clock เมื่อ x เปลี่ยนจาก 0 เป็น 1",
+   "params": {},
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "x"
+    ],
+    "out": [
+     "pulse"
+    ]
+   }
+  },
+  {
+   "kind": "debounce",
+   "label": "Debounce (3 ตัวอย่าง)",
+   "category": "ปุ่มกด / ขอบสัญญาณ",
+   "description": "y = 1 เมื่อ x เป็น 1 ครบ 3 clock ติดกัน — ใช้ clock ช้า (เช่น ~100 Hz จากตัวหารความถี่)",
+   "params": {},
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "x"
+    ],
+    "out": [
+     "y"
+    ]
+   }
+  },
+  {
+   "kind": "bcd_valid",
+   "label": "ตรวจเลข BCD (0–9)",
+   "category": "เปรียบเทียบ / ตรวจสอบ",
+   "description": "invalid = 1 เมื่อ d > 9 (d3·d2 + d3·d1), valid = กลับกัน — LED error ในแลป 6/7",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "d[3:0]"
+    ],
+    "out": [
+     "invalid",
+     "valid"
+    ]
+   }
+  },
+  {
+   "kind": "one_pulse",
+   "label": "ปุ่มกด → 1 พัลส์ (กันเด้ง + ขอบขาขึ้น)",
+   "category": "ปุ่มกด / ขอบสัญญาณ",
+   "description": "pulse = 1 หนึ่ง clock ต่อการกด 1 ครั้ง (btn ต้องเป็น 1 ครบ 3 clock) · level = ปุ่มหลังกันเด้ง · ใช้ clock ~100 Hz · ปุ่มบอร์ด EDGE กด = 1",
+   "params": {},
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "btn"
+    ],
+    "out": [
+     "pulse",
+     "level"
+    ]
+   }
+  },
+  {
+   "kind": "counter_digit",
+   "label": "ตัวนับ 1 หลัก (ต่อเป็นหลายหลักได้)",
+   "category": "ตัวนับ",
+   "description": "q นับ 0 … m−1 (หรือนับลงเมื่อ down) เมื่อ en = 1 · clr = ล้างเป็น 0, load = โหลด d (synchronous; async:true = clr ต่อเข้าขา reset ของ flip-flop ตรง ๆ และวนกลับด้วย async reset/preset — วงจรเล็กลง) · tc = en ตอนถึงปลาย (m−1 / 0) → ต่อเข้า en ของหลักถัดไป · m = 2..16",
+   "params": {
+    "m": "2..16",
+    "down": "true/false",
+    "load": "true/false",
+    "async": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "en",
+     "clr"
+    ],
+    "out": [
+     "q[3:0]",
+     "tc"
+    ]
+   }
+  },
+  {
+   "kind": "bcd_counter_multi",
+   "label": "ตัวนับ BCD หลายหลัก / นาฬิกา mm.ss",
+   "category": "ตัวนับ",
+   "description": "format: 00-99, 000-999, 0000-9999, 00-59, mm.ss (ถึง 59.59), 99.59 (นาทีถึง 99 — แลป 7; นับลงได้ด้วย down → ตัวจับเวลาถอยหลัง) · en, clr, load + ค่าเริ่มจากสวิตช์ · carry = en ตอนถึงปลาย · ต่อหลักด้วย counter_digit · ใช้ clk 50 MHz + en จากพัลส์ 1 Hz",
+   "params": {
+    "format": [
+     "00-99",
+     "000-999",
+     "0000-9999",
+     "00-59",
+     "mm.ss",
+     "99.59"
+    ],
+    "down": "true/false",
+    "load": "true/false",
+    "async": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "en",
+     "clr"
+    ],
+    "out": [
+     "ones[3:0]",
+     "tens[3:0]",
+     "carry"
+    ]
+   }
+  },
+  {
+   "kind": "bcd2_compare",
+   "label": "เปรียบเทียบเลข BCD 2 หลัก",
+   "category": "เปรียบเทียบ / ตรวจสอบ",
+   "description": "a (a_hi a_lo) กับ b (b_hi b_lo): หลักสิบก่อน เท่ากันค่อยดูหลักหน่วย → gt, eq, lt — แลป 6-3 · COMPM4 2 ตัว (หลักสิบ, หลักหน่วย)",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a_hi[3:0]",
+     "a_lo[3:0]",
+     "b_hi[3:0]",
+     "b_lo[3:0]"
+    ],
+    "out": [
+     "gt",
+     "eq",
+     "lt"
+    ]
+   }
+  },
+  {
+   "kind": "add3",
+   "label": "Add-3 (สำหรับแปลงไบนารี→BCD)",
+   "category": "แปลงรหัส",
+   "description": "y = x + 3 เมื่อ x ≥ 5, ไม่งั้น y = x (x 10–15 ไม่สนใจ) — ชิ้นส่วนของวิธี shift-and-add-3",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "x[3:0]"
+    ],
+    "out": [
+     "y[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "bin2bcd",
+   "label": "ไบนารี → BCD",
+   "category": "แปลงรหัส",
+   "description": "b (n บิต) → ones, tens, hundreds หลักละ 4 บิต · วิธี shift-and-add-3 จากบล็อก Add-3 · n = 4..8 (8 บิต = 0–255)",
+   "params": {
+    "n": "4..8"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "b[7:0]"
+    ],
+    "out": [
+     "ones[3:0]",
+     "tens[3:0]",
+     "hundreds[1:0]"
+    ]
+   }
+  },
+  {
+   "kind": "hex_7seg",
+   "label": "HEX → 7-segment (0–F)",
+   "category": "จอ 7-segment",
+   "description": "h (4 บิต) → a..g แสดง 0–9 A b C d E F · active_low:true สำหรับบอร์ด EDGE — แลป 4, 9, 10",
+   "params": {
+    "active_low": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "h[3:0]"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g"
+    ]
+   }
+  },
+  {
+   "kind": "seg7_mux4",
+   "label": "จอ 7-seg 4 หลัก (สแกน)",
+   "category": "จอ 7-segment",
+   "description": "ones (ขวาสุด), tens, hundreds, thousands → a..g + an[3:0] ของบอร์ด EDGE (active-low) เปิดทีละหลักตาม clk · hex:true แสดง 0–F · dp:true มีขา dots (1 = จุดติด) → dp · ใช้ clock ~1 kHz (50 MHz ÷ 50000)",
+   "params": {
+    "hex": "true/false",
+    "dp": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "ones[3:0]",
+     "tens[3:0]",
+     "hundreds[3:0]",
+     "thousands[3:0]"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g",
+     "an[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "addsub",
+   "label": "ตัวบวก/ลบ N บิต (two's complement)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "sub = 0: s = a + b · sub = 1: s = a − b (a + b' + 1) · cout = ตัวทด (ตอนลบ 1 = ไม่ยืม) · ovf = ล้นแบบมีเครื่องหมาย — แลป 4 · ต่อจาก Full adder n ตัว · n = 2..8",
+   "params": {
+    "n": "2..8"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]",
+     "sub"
+    ],
+    "out": [
+     "s[7:0]",
+     "cout",
+     "ovf"
+    ]
+   }
+  },
+  {
+   "kind": "alu_slice",
+   "label": "ALU 1 บิต (bit-slice)",
+   "category": "ALU",
+   "description": "y ของบิตหนึ่งตาม op: s (ผลบวก/ลบจากตัวบวก), a⊕b, ap (บิตข้างล่าง = เลื่อนซ้าย), a·b, a+b, b · ops ดูที่ ALU · ต่อ n ตัวเป็น ALU n บิต",
+   "params": {
+    "ops": [
+     "4",
+     "8"
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "ap",
+     "b",
+     "s",
+     "op[2:0]"
+    ],
+    "out": [
+     "y"
+    ]
+   }
+  },
+  {
+   "kind": "alu",
+   "label": "ALU (แลป 9 / 10)",
+   "category": "ALU",
+   "description": "ops:'4' → op[1:0] = ADD, SUB, XOR, SHL (แลป 9) · ops:'8' → op[2:0] = ไม่ทำอะไร (y = a), ADD, SUB, XOR, SHL, AND, OR, MOV (y = b) (แลป 10) · SHL = a เลื่อนซ้าย 1 · carry = ทด/ยืมของ ADD/SUB, overflow = ล้นแบบมีเครื่องหมาย, zero = y เป็น 0 · ตัวบวก/ลบ + ALU 1 บิต n ตัว · n = 4..8",
+   "params": {
+    "n": "4..8",
+    "ops": [
+     "4",
+     "8"
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]",
+     "op[2:0]"
+    ],
+    "out": [
+     "y[7:0]",
+     "carry",
+     "overflow",
+     "zero"
+    ]
+   }
+  },
+  {
+   "kind": "register_en",
+   "label": "Register มี enable + clear (ACC, FLAG)",
+   "category": "Flip-flop / Register",
+   "description": "q ← d ที่ขอบขาขึ้นของ clk เมื่อ en = 1 (ไม่งั้นค้างค่า) · clr = 1 ล้างเป็น 0 · async:true = ล้างทันทีไม่รอ clk (RESET ของแลป 10) · n = 1..16",
+   "params": {
+    "n": "1..16",
+    "async": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "d[7:0]",
+     "en",
+     "clr"
+    ],
+    "out": [
+     "q[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "mux_bus",
+   "label": "MUX เลือกบัส (k ชุด × n บิต)",
+   "category": "MUX / DEMUX / Decoder / Encoder",
+   "description": "y = ชุดที่ sel เลือก (sel 0 = a, 1 = b, …) · ทุกบิตใช้ sel ร่วมกัน · k = 2, 4, 8 ชุด · n = 1..8 บิต — แลป 9",
+   "params": {
+    "k": [
+     2,
+     4,
+     8
+    ],
+    "n": "1..8"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]",
+     "c[7:0]",
+     "d[7:0]",
+     "sel[1:0]"
+    ],
+    "out": [
+     "y[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "bcd_ascii",
+   "label": "BCD → ASCII (จอ LCD)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "d 0–9 → '0'–'9' (0x30 + d) · d > 9 → ช่องว่าง 0x20 — แลป 8",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "d[3:0]"
+    ],
+    "out": [
+     "ascii[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "lab6_counter",
+   "label": "แลป 6: ตัวนับ 00–yy ทั้งระบบ (บอร์ด EDGE)",
+   "category": "ระบบทั้งแลป",
+   "description": "yy_tens/yy_ones = ค่าสิ้นสุด yy จากสวิตช์ (SW7–4 / SW3–0, BCD) · btn = ปุ่มกลาง Start/Stop (toggle, กันเด้งด้วยการอ่านทุก tick) · นับขึ้นทีละ 1 ทุก tick (50 MHz ÷ tick = 20 Hz) วนกลับ 00 เมื่อถึง yy · err = yy ไม่ใช่ BCD หรือค่านับ > yy (หยุดนับ, กดปุ่มไม่มีผล) · a..g + an[3:0] ต่อจอ 7-seg 2 หลักขวา (สแกนด้วย 50 MHz ÷ scan) · running, tens, ones ออก LED · จับขาบอร์ดให้แล้ว",
+   "params": {
+    "tick": "2..2147483648",
+    "scan": "2..2147483648"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "btn",
+     "yy_tens[3:0]",
+     "yy_ones[3:0]"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g",
+     "an[3:0]",
+     "err",
+     "running",
+     "tens[3:0]",
+     "ones[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "lab7_countdown",
+   "label": "แลป 7: ตัวจับเวลาถอยหลัง mm.ss ทั้งระบบ (บอร์ด EDGE)",
+   "category": "ระบบทั้งแลป",
+   "description": "sw[15:0] = เวลาเริ่ม (BCD: สิบนาที/หน่วยนาที/สิบวินาที/หน่วยวินาที, 00.00–99.59) · set = โหลดค่า (ปุ่มซ้าย J14) · startstop = เริ่ม/หยุด (ปุ่มบน J13) · reset = ล้างเป็น 00.00 (ปุ่มกลาง J12) · นับลงทีละวินาที (50 MHz ÷ tick) ยืมข้ามนาที หยุดที่ 00.00 · led_error = ค่าไม่ใช่ BCD หรือสิบวินาที > 5 · led_timeup = ถึง 00.00 · running · จอ 7-seg 4 หลักมีจุดคั่น mm.ss · จับขาบอร์ดให้แล้ว",
+   "params": {
+    "tick": "2..2147483648",
+    "btn": "2..2147483648",
+    "scan": "2..2147483648",
+    "count_out": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "set",
+     "startstop",
+     "reset",
+     "sw[15:0]"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g",
+     "dp",
+     "an[3:0]",
+     "led_error",
+     "led_timeup",
+     "running"
+    ]
+   }
+  },
+  {
+   "kind": "char_7seg",
+   "label": "ตัวเลข/ตัวอักษร → 7-segment (0–9, A–Z)",
+   "category": "จอ 7-segment",
+   "description": "code → a..g ตามตาราง A–Z ของวิชา · set 0-9a-z: 0–9 = ตัวเลข, 10–35 = A–Z · set a-z: 0–25 = A–Z · รหัสที่เหลือ = ว่าง · blank0:true เลื่อนให้รหัส 0 = ว่าง · active_low:true สำหรับบอร์ด EDGE",
+   "params": {
+    "set": [
+     "0-9a-z",
+     "a-z"
+    ],
+    "blank0": "true/false",
+    "active_low": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "code[5:0]"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g"
+    ]
+   }
+  },
+  {
+   "kind": "seq_counter",
+   "label": "ตัวนับตามลำดับที่กำหนด (จำนวนเฉพาะ, นับทีละ 3, …)",
+   "category": "ตัวนับ",
+   "description": "q เดินตาม values ทีละ clock แล้ววน เช่น 2,3,5,7,11,13 · 0..99 step 3 · 1,1,2,3,5,8,13 · 0-88 · en:true นับเมื่อ en = 1 · clr:true ล้างกลับค่าแรก (synchronous) · ≤ 64 ค่า, 0–255",
+   "params": {
+    "values": "text, e.g. \"2,3,5,7,11,13\"",
+    "en": "true/false",
+    "clr": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "led_pattern",
+   "label": "ไฟวิ่ง (LED running light)",
+   "category": "ไฟ LED / PWM",
+   "description": "led[n] เปลี่ยนทุก clock · ring = ไฟดวงเดียววิ่ง led0 → สุด แล้ววน · johnson = ติดเพิ่มทีละดวงจนเต็มแล้วดับทีละดวง · bounce = วิ่งไปกลับ · fill = ติดเพิ่มเป็นแถบจนเต็มแล้วเริ่มใหม่ · en / clr ได้ · ใช้ clock ช้า (~2–10 Hz) · n = 2..16",
+   "params": {
+    "n": "2..16",
+    "mode": [
+     "ring",
+     "johnson",
+     "bounce",
+     "fill"
+    ],
+    "en": "true/false",
+    "clr": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "led[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "pwm",
+   "label": "PWM (ปรับความสว่าง / ความเร็ว)",
+   "category": "ไฟ LED / PWM",
+   "description": "pwm = 1 เมื่อตัวนับภายใน (0 … 2ⁿ−1 วนทุก clock) < duty → duty/2ⁿ ของเวลา · duty = 0 ดับ · ตัวนับ mod-2ⁿ จากคลัง (n ≤ 6) เทียบด้วย COMPM ในคลังอุปกรณ์ · n = 2..8 บิต · clock ≥ 2ⁿ × 100 Hz ไม่ให้เห็นกะพริบ",
+   "params": {
+    "n": "2..8"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "duty[3:0]"
+    ],
+    "out": [
+     "pwm"
+    ]
+   }
+  },
+  {
+   "kind": "tc_decode",
+   "label": "Two's complement → เครื่องหมาย + ขนาด",
+   "category": "แปลงรหัส",
+   "description": "x (n บิต, two's complement) → neg = บิตเครื่องหมาย, mag = |x| (n บิต ไม่มีเครื่องหมาย) — แสดงเลขติดลบบน 7-seg · n = 2..8",
+   "params": {
+    "n": "2..8"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "x[7:0]"
+    ],
+    "out": [
+     "mag[7:0]",
+     "neg"
+    ]
+   }
+  },
+  {
+   "kind": "text_scroll",
+   "label": "ข้อความวิ่งบนจอ 7-seg 4 หลัก (ชื่อ, รหัสนักศึกษา)",
+   "category": "จอ 7-segment",
+   "description": "text เลื่อนไปทางซ้ายทีละตัวอักษรเมื่อ step = 1 (ต่อ step = 0 → ข้อความนิ่ง แสดง 4 ตัวแรก) · clk ~1 kHz สำหรับสแกน (50 MHz ÷ 50000), step = พัลส์ 1 clock ทุก ~0.3 วินาที (ตัวหาร + ตัวจับขอบ) · ออก a..g + an[3:0] active-low ของบอร์ด EDGE · ตัวอักษร 0-9 A-Z ช่องว่าง - _ = ' · ≤ 32 ตัว",
+   "params": {
+    "text": "text, e.g. \"HELLO \""
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk",
+     "step"
+    ],
+    "out": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "e",
+     "f",
+     "g",
+     "an[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "divider_chain",
+   "label": "หารความถี่ ÷N แบบหลายขั้น",
+   "category": "นาฬิกา / หารความถี่",
+   "description": "N ใหญ่ (เช่น 5000 = ÷5 → ÷10 → ÷10 → ÷10) แบ่งเป็นตัวหารเล็กต่อกันเป็นทอด ๆ ให้อัตโนมัติ — วงจรเล็กและอ่านง่ายกว่าตัวนับใหญ่ตัวเดียว · stages = กำหนดเองได้ (ผลคูณต้องเท่ากับ N) · ขั้นสุดท้ายเป็นเลขคู่ = duty 50%",
+   "params": {
+    "n": "2..2147483648",
+    "stages": "text, e.g. \"\""
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk_in"
+    ],
+    "out": [
+     "clk_out"
+    ]
+   }
+  },
+  {
+   "kind": "cmp_slice",
+   "label": "ตัวเปรียบเทียบ 1 บิต (ต่อเป็นทอด)",
+   "category": "เปรียบเทียบ / ตรวจสอบ",
+   "description": "เทียบ a กับ b หนึ่งบิต ต่อจากบิตที่สูงกว่า: gt = gt_in + eq_in·a·b' · lt = lt_in + eq_in·a'·b · eq = eq_in·(a⊙b) — บิตสูงสุดใส่ gt_in = 0, eq_in = 1, lt_in = 0 (แบบ 7485)",
+   "params": {},
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a",
+     "b",
+     "gt_in",
+     "eq_in",
+     "lt_in"
+    ],
+    "out": [
+     "gt",
+     "eq",
+     "lt"
+    ]
+   }
+  },
+  {
+   "kind": "multiplier",
+   "label": "ตัวคูณ n × m บิต (array multiplier)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "p = a × b · ผลคูณย่อย a·bᵢ ด้วย AND แล้วบวกทีละแถวด้วยตัวบวก (บล็อก) แบบในตำรา · n, m = 1..4 บิต → p มี n + m บิต",
+   "params": {
+    "n": "1..4",
+    "m": "1..4"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[3:0]",
+     "b[3:0]"
+    ],
+    "out": [
+     "p[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "ring_counter",
+   "label": "ไล่บิตทีละตำแหน่ง (ring / one-hot)",
+   "category": "ตัวนับ",
+   "description": "มีบิตเป็น 1 ตัวเดียววิ่ง q0 → q(n−1) แล้ววน (…0001 → 0010 → 0100 → 1000) ทุก clock · dir down = วิ่งกลับทาง · shift = D-FF n ตัวต่อเป็นวง ตั้งตัวเองได้ (d0 = 1 เมื่อบิตอื่นเป็น 0 หมด) · decoder = ตัวนับ + DECODER ในคลังอุปกรณ์ (n = 4, 8, 16) · en / clr (กลับไปบิตแรก) ได้ · n = 2..16",
+   "params": {
+    "n": "2..16",
+    "how": [
+     "shift",
+     "decoder"
+    ],
+    "down": "true/false",
+    "en": "true/false",
+    "clr": "true/false"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "q[3:0]"
+    ]
+   }
+  },
+  {
+   "kind": "ascii_case",
+   "label": "ASCII ตัวพิมพ์ใหญ่ ↔ เล็ก",
+   "category": "ASCII / ตัวอักษร",
+   "description": "a = รหัส ASCII 7 บิต → y · upper = a–z เป็น A–Z (ลบ 0x20) · lower = A–Z เป็น a–z · swap = สลับทั้งคู่ · ตัวอื่นผ่านไปเหมือนเดิม — ต่างกันแค่บิต 5",
+   "params": {
+    "mode": [
+     "upper",
+     "lower",
+     "swap"
+    ]
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "a[6:0]"
+    ],
+    "out": [
+     "y[6:0]"
+    ]
+   }
+  },
+  {
+   "kind": "hex_ascii",
+   "label": "ค่า 0–15 → ตัวอักษร ASCII ('0'–'9', 'A'–'F')",
+   "category": "ASCII / ตัวอักษร",
+   "description": "v 4 บิต → ascii 8 บิต: 0–9 = 0x30–0x39, 10–15 = 'A'–'F' (0x41–0x46) หรือ 'a'–'f' ถ้า lower · ใช้ส่งเลขฐาน 16 ออก UART / แสดงบน LCD",
+   "params": {
+    "lower": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "v[3:0]"
+    ],
+    "out": [
+     "ascii[7:0]"
+    ]
+   }
+  },
+  {
+   "kind": "ascii_value",
+   "label": "ตัวอักษร ASCII → ค่า ('0'–'9' / 'A'–'F')",
+   "category": "ASCII / ตัวอักษร",
+   "description": "ascii 8 บิต → v 4 บิต + valid · '0'–'9' = 0–9 · hex: 'A'–'F' และ 'a'–'f' = 10–15 · ตัวอื่น valid = 0, v = 0 — ใช้รับเลขจาก UART / คีย์บอร์ด",
+   "params": {
+    "hex": "true/false"
+   },
+   "sequential": false,
+   "ports": {
+    "in": [
+     "ascii[7:0]"
+    ],
+    "out": [
+     "v[3:0]",
+     "valid"
+    ]
+   }
+  },
+  {
+   "kind": "note_divider",
+   "label": "โน้ตจากตัวหารความถี่ (วงจรเกต)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "clk_in 50 MHz ÷ N → clk_out = ความถี่ของโน้ตที่เลือก (duty 50 %) ต่อ buzzer ได้เลย · N = 50 000 000 / f ปัดเป็นคู่ · เช่น A4 440 Hz = ÷113 636 · ไม่ใช้ VHDL",
+   "params": {
+    "note": [
+     "C",
+     "C#",
+     "D",
+     "D#",
+     "E",
+     "F",
+     "F#",
+     "G",
+     "G#",
+     "A",
+     "A#",
+     "B"
+    ],
+    "octave": "0..8",
+    "n": "0..2147483648"
+   },
+   "sequential": true,
+   "ports": {
+    "in": [
+     "clk_in"
+    ],
+    "out": [
+     "clk_out"
+    ]
+   }
+  }
+ ],
+ "vhdl": [
+  {
+   "kind": "add",
+   "label": "บวก a + b (VHDL)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "s = a + b แบบไม่มีเครื่องหมาย — s กว้างกว่า a, b หนึ่งบิต (บิตทด)",
+   "params": {
+    "n": "จำนวนบิต: 1..16 (ค่าเริ่ม 8)"
+   },
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]"
+    ],
+    "out": [
+     "s[8:0]"
+    ]
+   },
+   "board_pins": []
+  },
+  {
+   "kind": "sub",
+   "label": "ลบ a − b (VHDL)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "d = a − b (วนรอบแบบ n บิต) · neg = 1 เมื่อ a < b (ผลติดลบ)",
+   "params": {
+    "n": "จำนวนบิต: 1..16 (ค่าเริ่ม 8)"
+   },
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]"
+    ],
+    "out": [
+     "d[7:0]",
+     "neg"
+    ]
+   },
+   "board_pins": []
+  },
+  {
+   "kind": "mul",
+   "label": "คูณ a × b (VHDL)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "p = a × b · p กว้างเป็นสองเท่าของ a, b",
+   "params": {
+    "n": "จำนวนบิต: 1..16 (ค่าเริ่ม 8)"
+   },
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]"
+    ],
+    "out": [
+     "p[15:0]"
+    ]
+   },
+   "board_pins": []
+  },
+  {
+   "kind": "divmod",
+   "label": "หาร a ÷ b และเศษ a % b (VHDL)",
+   "category": "บวก / ลบ / คูณ / หาร",
+   "description": "q = a / b (ปัดทิ้ง), r = a mod b (เศษ, %) · b = 0 → q เป็น 1 ทุกบิต, r = a, err = 1",
+   "params": {
+    "n": "จำนวนบิต: 1..16 (ค่าเริ่ม 8)"
+   },
+   "ports": {
+    "in": [
+     "a[7:0]",
+     "b[7:0]"
+    ],
+    "out": [
+     "q[7:0]",
+     "r[7:0]",
+     "err"
+    ]
+   },
+   "board_pins": []
+  },
+  {
+   "kind": "bin2dec",
+   "label": "เลขฐานสอง → หลักฐานสิบ (VHDL)",
+   "category": "แปลงรหัส",
+   "description": "value → d0 (หลักหน่วย) … ทีละ 4 บิต (BCD) ด้วย / 10 และ mod 10 — ไว้ส่งต่อให้จอ 7-seg หรือ LCD",
+   "params": {
+    "digits": "จำนวนหลัก: 1..5 (ค่าเริ่ม 4)"
+   },
+   "ports": {
+    "in": [
+     "value[13:0]"
+    ],
+    "out": [
+     "d0[3:0]",
+     "d1[3:0]",
+     "d2[3:0]",
+     "d3[3:0]"
+    ]
+   },
+   "board_pins": []
+  },
+  {
+   "kind": "seg7_num",
+   "label": "แสดงตัวเลขบน 7-seg 4 หลัก (VHDL)",
+   "category": "จอ 7-segment",
+   "description": "value (0–9999) แสดงบนจอ 7-seg 4 หลักของบอร์ด EDGE: สแกนเองจาก clk 50 MHz, seg / an active-low · ดับเลข 0 นำหน้าได้",
+   "params": {
+    "blank": "ดับเลข 0 นำหน้า: true/false",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "value[13:0]"
+    ],
+    "out": [
+     "seg[6:0]",
+     "an[3:0]"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "seg[0]",
+    "seg[1]",
+    "seg[2]",
+    "seg[3]",
+    "seg[4]",
+    "seg[5]",
+    "seg[6]",
+    "an[0]",
+    "an[1]",
+    "an[2]",
+    "an[3]"
+   ]
+  },
+  {
+   "kind": "lcd16x2",
+   "label": "จอ LCD 16×2: ข้อความ + ตัวเลข (VHDL)",
+   "category": "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
+   "description": "เขียน 2 บรรทัดบนจอ LCD ของบอร์ด EDGE (HD44780, 8 บิต) วนซ้ำทุก ~80 ms · ใส่ # ในข้อความ = หลักของตัวเลขจากขา value (เช่น \"LIGHT: ####\") — แลป 8",
+   "params": {
+    "line1": "บรรทัด 1: ข้อความ เช่น \"FPGA EDGE\"",
+    "line2": "บรรทัด 2 (# = หลักตัวเลข): ข้อความ เช่น \"VALUE: ####\"",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "value[13:0]"
+    ],
+    "out": [
+     "lcd_data[7:0]",
+     "lcd_rs",
+     "lcd_e"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "lcd_rs",
+    "lcd_e",
+    "lcd_data[0]",
+    "lcd_data[1]",
+    "lcd_data[2]",
+    "lcd_data[3]",
+    "lcd_data[4]",
+    "lcd_data[5]",
+    "lcd_data[6]",
+    "lcd_data[7]"
+   ]
+  },
+  {
+   "kind": "lcd_scroll",
+   "label": "จอ LCD 16×2: ข้อความเลื่อน (VHDL)",
+   "category": "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
+   "description": "ข้อความยาวได้ถึง 48 ตัววิ่งผ่านบรรทัดหนึ่งของจอ LCD (เลื่อนซ้ายหรือขวา ตั้งความเร็วได้) อีกบรรทัดอยู่นิ่ง · ใส่ # ในบรรทัดนิ่ง = หลักของตัวเลขจากขา value",
+   "params": {
+    "text": "ข้อความที่เลื่อน: ข้อความ เช่น \"HELLO FROM FPGA EDGE SPARTAN-7\"",
+    "row": "เลื่อนบรรทัดที่: 1 | 2",
+    "right": "เลื่อนไปทางขวา (ไม่ติ๊ก = ไปทางซ้าย): true/false",
+    "ms": "เลื่อน 1 ตัวทุก (ms): 50..2000 (ค่าเริ่ม 300)",
+    "other": "อีกบรรทัด (นิ่ง, # = หลักตัวเลข): ข้อความ เช่น \"FPGA EDGE\"",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk"
+    ],
+    "out": [
+     "lcd_data[7:0]",
+     "lcd_rs",
+     "lcd_e"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "lcd_rs",
+    "lcd_e",
+    "lcd_data[0]",
+    "lcd_data[1]",
+    "lcd_data[2]",
+    "lcd_data[3]",
+    "lcd_data[4]",
+    "lcd_data[5]",
+    "lcd_data[6]",
+    "lcd_data[7]"
+   ]
+  },
+  {
+   "kind": "adc_mcp3208",
+   "label": "อ่าน ADC MCP3208 (SPI) (VHDL)",
+   "category": "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
+   "description": "อ่านค่า 12 บิต (0–4095) จากช่อง ch ของ MCP3208 บนบอร์ด EDGE ซ้ำไปเรื่อย ๆ · done = 1 หนึ่ง clock ทุกครั้งที่ได้ค่าใหม่ · SCK 500 kHz — แลป 8 (LDR ช่อง 6)",
+   "params": {
+    "ch": "ช่อง (0–7): 0..7 (ค่าเริ่ม 6)",
+    "clk_hz": "clk (Hz): 2000000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "adc_dout"
+    ],
+    "out": [
+     "adc_sck",
+     "adc_cs",
+     "adc_din",
+     "value[11:0]",
+     "done"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "adc_dout",
+    "adc_sck",
+    "adc_cs",
+    "adc_din"
+   ]
+  },
+  {
+   "kind": "uart_tx",
+   "label": "ส่งข้อมูลออก UART (ไปคอม) (VHDL)",
+   "category": "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
+   "description": "start = 1 → ส่ง data 8 บิตทาง tx (8N1) ไปที่คอมผ่าน USB · busy = 1 ระหว่างส่ง · baud เลือกได้",
+   "params": {
+    "baud": "baud: 9600 | 19200 | 57600 | 115200",
+    "clk_hz": "clk (Hz): 1000000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "start",
+     "data[7:0]"
+    ],
+    "out": [
+     "tx",
+     "busy"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "tx"
+   ]
+  },
+  {
+   "kind": "tone",
+   "label": "เสียงบัซเซอร์ (ความถี่ที่ตั้งไว้) (VHDL)",
+   "category": "อุปกรณ์บนบอร์ด (LCD, ADC, UART, เสียง)",
+   "description": "en = 1 → buzzer เป็นคลื่นสี่เหลี่ยมความถี่ f Hz (ต่อขา buzzer ของบอร์ด EDGE)",
+   "params": {
+    "f": "ความถี่ (Hz): 20..20000 (ค่าเริ่ม 440)",
+    "clk_hz": "clk (Hz): 100000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "en"
+    ],
+    "out": [
+     "buzzer"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "buzzer"
+   ]
+  },
+  {
+   "kind": "note_tone",
+   "label": "เล่นโน้ตจากสวิตช์ (VHDL)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "note = 1–12 → C, C#, D, D#, E, F, F#, G, G#, A, A#, B (0 = เงียบ) · octave ตั้งไว้ หรือ oct_in = เลือกจากขา oct (0–8) · ความถี่ตามตาราง (A4 = 440 Hz) → buzzer ของบอร์ด EDGE",
+   "params": {
+    "octave": "octave: 0..8 (ค่าเริ่ม 4)",
+    "oct_in": "เลือก octave จากขา oct: true/false",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "note[3:0]"
+    ],
+    "out": [
+     "buzzer"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "buzzer",
+    "note[0]",
+    "note[1]",
+    "note[2]",
+    "note[3]"
+   ]
+  },
+  {
+   "kind": "piano",
+   "label": "เปียโน 8 คีย์ (โด เร มี … โด) (VHDL)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "key[0..7] = C D E F G A B C (octave ถัดไป) ของ octave ที่ตั้ง · กดหลายคีย์ = คีย์เลขน้อยดัง · ไม่กด = เงียบ · ต่อสวิตช์หรือปุ่ม → buzzer",
+   "params": {
+    "octave": "octave: 0..7 (ค่าเริ่ม 4)",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "key[7:0]"
+    ],
+    "out": [
+     "buzzer"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "buzzer",
+    "key[0]",
+    "key[1]",
+    "key[2]",
+    "key[3]",
+    "key[4]",
+    "key[5]",
+    "key[6]",
+    "key[7]"
+   ]
+  },
+  {
+   "kind": "melody",
+   "label": "เล่นเพลงจากโน้ต (VHDL)",
+   "category": "เสียง / โน้ตดนตรี",
+   "description": "เขียนเพลงเป็นโน้ต เช่น \"C4 C4 G4 G4 A4 A4 G4:2\" (R = พัก, :2 = 2 จังหวะ, :0.5 = ครึ่งจังหวะ, # / b ได้) · bpm ตั้งได้ · en = 1 เล่น, 0 = หยุดและกลับต้นเพลง · loop = วนซ้ำ ไม่งั้น done = 1 เมื่อจบ · เว้นช่วงสั้น ๆ ท้ายทุกโน้ตให้ได้ยินโน้ตซ้ำ",
+   "params": {
+    "song": "โน้ต: ข้อความ เช่น \"C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2\"",
+    "bpm": "ความเร็ว (bpm): 30..300 (ค่าเริ่ม 120)",
+    "loop": "วนซ้ำ: true/false",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "en"
+    ],
+    "out": [
+     "buzzer",
+     "done"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "en",
+    "buzzer",
+    "done"
+   ]
+  },
+  {
+   "kind": "ascii_7seg",
+   "label": "ตัวอักษร ASCII → 7-segment (VHDL)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "code 8 บิต → seg (a = บิต 0 … g = บิต 6) · '0'–'9', 'A'–'Z' และ 'a'–'z' (ตามตารางตัวอักษรของวิชา), '-' '_' '=' ช่องว่าง · ตัวที่แสดงไม่ได้ = ดับ · active-low สำหรับบอร์ด EDGE (เป็นตารางใน VHDL — แบบเกตใช้ ~400 เกต)",
+   "params": {
+    "active_low": "active-low (บอร์ด EDGE): true/false"
+   },
+   "ports": {
+    "in": [
+     "code[7:0]"
+    ],
+    "out": [
+     "seg[6:0]"
+    ]
+   },
+   "board_pins": [
+    "seg[0]",
+    "seg[1]",
+    "seg[2]",
+    "seg[3]",
+    "seg[4]",
+    "seg[5]",
+    "seg[6]",
+    "code[0]",
+    "code[1]",
+    "code[2]",
+    "code[3]",
+    "code[4]",
+    "code[5]",
+    "code[6]",
+    "code[7]"
+   ]
+  },
+  {
+   "kind": "lcd_ascii",
+   "label": "จอ LCD: ตัวอักษรจากรหัส ASCII (VHDL)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "code 8 บิต (เช่นจากสวิตช์) → จอ LCD 16×2 · ในข้อความ @ = ตัวอักษรของ code, % = เลขฐาน 16 (ใส่ %% = 2 หลัก), # = เลขฐาน 10 (### = 3 หลัก), ~ = เลขฐาน 2 (8 ตัว = 8 บิต) · รหัสต่ำกว่า 0x20 แสดงเป็นช่องว่าง",
+   "params": {
+    "line1": "บรรทัด 1: ข้อความ เช่น \"CHAR: @\"",
+    "line2": "บรรทัด 2: ข้อความ เช่น \"HEX:%% DEC:###\"",
+    "clk_hz": "clk (Hz): 1000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "code[7:0]"
+    ],
+    "out": [
+     "lcd_data[7:0]",
+     "lcd_rs",
+     "lcd_e"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "lcd_rs",
+    "lcd_e",
+    "lcd_data[0]",
+    "code[0]",
+    "lcd_data[1]",
+    "code[1]",
+    "lcd_data[2]",
+    "code[2]",
+    "lcd_data[3]",
+    "code[3]",
+    "lcd_data[4]",
+    "code[4]",
+    "lcd_data[5]",
+    "code[5]",
+    "lcd_data[6]",
+    "code[6]",
+    "lcd_data[7]",
+    "code[7]"
+   ]
+  },
+  {
+   "kind": "uart_text",
+   "label": "ส่งข้อความออก UART (VHDL)",
+   "category": "ASCII / ตัวอักษร",
+   "description": "กด start (ขอบขาขึ้น) → ส่งข้อความทีละตัว (ASCII, 8N1) ไปที่คอม · ต่อท้ายด้วยขึ้นบรรทัดใหม่ (CR LF) ได้ · busy = 1 ระหว่างส่ง · ดูในโปรแกรม serial terminal ที่ baud เดียวกัน",
+   "params": {
+    "text": "ข้อความ: ข้อความ เช่น \"HELLO FPGA\"",
+    "crlf": "ขึ้นบรรทัดใหม่ท้ายข้อความ: true/false",
+    "baud": "baud: 9600 | 19200 | 57600 | 115200",
+    "clk_hz": "clk (Hz): 10000..200000000 (ค่าเริ่ม 50000000)"
+   },
+   "ports": {
+    "in": [
+     "clk",
+     "start"
+    ],
+    "out": [
+     "tx",
+     "busy"
+    ]
+   },
+   "board_pins": [
+    "clk",
+    "start",
+    "tx",
+    "busy"
+   ]
+  }
+ ],
+ "generators": [
+  {
+   "id": "library",
+   "name": "คลังชิ้นส่วนและโมดูล",
+   "description": "ชิ้นส่วนสำเร็จรูป (ตัวบวก ตัวนับ 7-seg …) แบ่งหมวด และโมดูลของฉัน"
+  },
+  {
+   "id": "tt",
+   "name": "ตารางความจริง / K-map",
+   "description": "กรอกตาราง → ลดรูป → ได้วงจรเกต"
+  },
+  {
+   "id": "cnt",
+   "name": "ตัวนับ N บิต",
+   "description": "ripple counter นับขึ้น 0 … 2ᴺ−1"
+  },
+  {
+   "id": "mod",
+   "name": "ตัวนับ mod-N",
+   "description": "synchronous นับ 0 … N−1 แล้ววน"
+  },
+  {
+   "id": "jkmod",
+   "name": "ตัวนับ/หารความถี่ JK-FF",
+   "description": "synchronous JK-FF นับ 0 … N−1 · clk_in → clk_out (บิตสูงสุด) แบบในแลป"
+  },
+  {
+   "id": "clkdiv",
+   "name": "หารความถี่ (N ใดก็ได้)",
+   "description": "clk_in → clk_out = clk_in / N · เช่น 50 MHz → 20 Hz ใส่ 2500000"
+  },
+  {
+   "id": "seq",
+   "name": "ลำดับนับเอง",
+   "description": "เช่น 0 2 5 7 3 — วนตามลำดับ"
+  },
+  {
+   "id": "shift",
+   "name": "Shift register",
+   "description": "เลื่อนบิตเข้า sin ทีละ clock"
+  },
+  {
+   "id": "reg",
+   "name": "Register N บิต",
+   "description": "เก็บ d0…dN ทุกขอบ clock"
+  },
+  {
+   "id": "busports",
+   "name": "รวมขาเป็นบัส (q0…q3 → q)",
+   "description": "ขา INPUT/OUTPUT ที่ชื่อเรียงเลข รวมเป็นขาบัสขาเดียวพร้อม bus tap — แผ่นย่อยจะมีขาเดียวแทน 4 ขา"
+  },
+  {
+   "id": "fsm",
+   "name": "ออกแบบ FSM (state diagram)",
+   "description": "เขียน state + ลูกศร → วงจร D-FF ที่ตรวจเทียบกับ diagram แล้ว"
+  },
+  {
+   "id": "report",
+   "name": "ทำรายงานแลป",
+   "description": "รูปวงจรทุกชั้น, ตารางความจริง, สมการ, ผลทีละ clock, ขาบอร์ด, VHDL — พิมพ์เป็น PDF หรือเปิดใน Word"
+  },
+  {
+   "id": "labhelper",
+   "name": "ผู้ช่วยทำแลป (จากใบงาน)",
+   "description": "ใบแลปเป็นเช็กลิสต์ทีละขั้น + ให้เอเจนต์ช่วย + ตั้งข้อกำหนด + ดูเฉลย"
+  },
+  {
+   "id": "equiv",
+   "name": "เทียบวงจรสองแผ่น",
+   "description": "ตรวจว่าวงจรสองแผ่นทำงานเหมือนกันไหม — เช่น วงจรของนักศึกษา เทียบกับวงจรอ้างอิง"
+  },
+  {
+   "id": "vhdl_block",
+   "name": "บล็อก VHDL (เขียนโค้ด)",
+   "description": "บล็อกที่ข้างในเป็นโค้ด VHDL — วางบนแผ่นแล้วต่อสายได้ จำลองได้"
+  }
+ ]
+}

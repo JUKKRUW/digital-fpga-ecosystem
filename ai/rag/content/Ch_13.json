@@ -1,0 +1,205 @@
+{
+ "source": "Ch_13.pdf",
+ "group": "content",
+ "chapter": "13",
+ "title": "Programmable Logic Device Architectures",
+ "chunks": [
+  {
+   "id": "ch13-13-1-family-tree",
+   "section": "13-1",
+   "topic": "Digital systems family tree",
+   "type": "concept",
+   "summary": "Digital hardware splits into standard logic (TTL/CMOS/ECL), ASICs (PLDs, gate arrays, standard cell, full custom) and microprocessors/DSP; PLDs are SPLD, CPLD and FPGA.",
+   "text": "A family tree sorts the hardware choices for a digital system into three branches. Standard logic: the basic functional parts (gates, flip-flops, decoders, multiplexers, registers, counters) sold as SSI/MSI chips in the TTL, CMOS and ECL families. Microprocessors and DSP: devices controlled by executing a program of instructions; a hardware solution is always faster than a software one. ASICs (application-specific integrated circuits): ICs made for one application, subdivided into PLDs, gate arrays, standard-cell and full-custom. PLDs (programmable logic devices, also called field-programmable logic devices, FPLDs) can be configured to make any digital circuit and are generally the lowest-cost subcategory. They come as SPLDs (simple PLDs: fuse, EPROM or EEPROM based), CPLDs (complex PLDs: EPROM, EEPROM or Flash) and FPGAs (field-programmable gate arrays: SRAM, Flash or antifuse). CPLDs and FPGAs together are called high-capacity PLDs (HCPLDs).",
+   "keywords": [
+    "family tree",
+    "standard logic",
+    "ASIC",
+    "PLD",
+    "SPLD",
+    "CPLD",
+    "FPGA",
+    "HCPLD",
+    "microprocessor",
+    "DSP",
+    "ประเภทอุปกรณ์ดิจิทัล"
+   ],
+   "pages": [
+    4,
+    5,
+    6,
+    7
+   ],
+   "needs_figure": true,
+   "figure_note": "Tree: Digital systems → Standard logic (TTL, CMOS, ECL), ASICs (PLDs, Gate arrays, Standard cell, Full custom), Microprocessors and DSP; PLDs → SPLDs (Fuse, EPROM, EEPROM), CPLDs (EPROM, EEPROM, Flash), FPGAs (SRAM, Flash, Antifuse); CPLDs and FPGAs boxed together as HCPLDs.",
+   "related_labs": []
+  },
+  {
+   "id": "ch13-13-1-asic-kinds",
+   "section": "13-1",
+   "topic": "Gate arrays, standard-cell and full-custom ASICs",
+   "type": "concept",
+   "summary": "Gate arrays connect prefabricated gates with a custom mask; standard-cell ASICs use a library of predefined cells; full-custom designs every transistor — fastest and smallest but most expensive.",
+   "text": "Mask-programmed gate arrays (MPGAs) are ULSI chips whose function is made by interconnecting hundreds of thousands of prefabricated gates through a custom mask, much like the data in a mask-programmed ROM. Each chip is cheaper than a PLD of the same gate count, but the custom programming is very expensive and takes a long lead time. Standard-cell ASICs build the system from predefined logic building blocks (cells) stored in a library database; design costs and lead time are higher than for gate arrays, but the cells are smaller than the same functions in a gate array, giving higher speed and lower manufacturing cost. Full-custom ASICs have every component and interconnection designed by the IC designer; they cost the most time and money but can reach the highest speed and smallest die area, which lowers manufacturing cost in volume.",
+   "keywords": [
+    "gate array",
+    "MPGA",
+    "standard cell",
+    "full custom",
+    "ASIC",
+    "mask"
+   ],
+   "pages": [
+    8,
+    9,
+    10
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch13-13-2-pld-circuitry",
+   "section": "13-2",
+   "topic": "PLD circuitry: programmable AND/OR arrays and fuses",
+   "type": "concept",
+   "summary": "A PLD is an AND array that forms product terms of the inputs and their complements feeding an OR array; blowing fuses selects which products each OR output sums (sum of products).",
+   "text": "Basic PLD circuitry: each input (A, B) goes through a buffer that gives both the true and complemented signal on the input lines. An AND array forms product terms (for two inputs: A'B', A'B, AB', AB) on the product lines. Each output is an OR gate connected to every product line through a fuse; blowing the appropriate fuses at the OR-array inputs leaves only the wanted products, so each output O1..O4 is a sum of products of the inputs. Data books use a simplified symbol: one line drawn into each gate stands for all its inputs, a dot means a hard-wired (fixed) connection, an X means an intact fuse (programmable connection kept), and no mark means no connection (blown fuse).",
+   "keywords": [
+    "PLD",
+    "AND array",
+    "OR array",
+    "fuse",
+    "sum of products",
+    "product term",
+    "programmable",
+    "ฟิวส์",
+    "อาร์เรย์ AND OR"
+   ],
+   "pages": [
+    11,
+    12
+   ],
+   "needs_figure": true,
+   "figure_note": "A two-input PLD: inverting/non-inverting input buffers, four AND gates forming A'B', A'B, AB', AB, and four OR gates each connected to all product lines through fuses; second figure shows the simplified notation with dots for hard-wired, X for intact fuse and nothing for blown fuse/no connection.",
+   "related_labs": []
+  },
+  {
+   "id": "ch13-13-3-prom-pal-pla-gal",
+   "section": "13-3",
+   "topic": "PLD architectures: PROM, PAL, FPLA, GAL",
+   "type": "concept",
+   "summary": "PROM = fixed AND, programmable OR; PAL = programmable AND, fixed OR (registered PALs add D flip-flops); FPLA = both programmable; GAL = EEPROM-programmable PAL replacement with output logic macrocells.",
+   "text": "PROM as a PLD: the AND array is fixed (a full decoder of the inputs) and fuses in the OR array are blown to implement any sum-of-products expression; logic compilers generate the fuse bit map. PAL (programmable array logic): every AND gate can be programmed to form any product of the inputs, and the OR array is fixed (each output sums a fixed number of products). Registered PALs feed the SOP output into a D flip-flop clocked from a common clock pin, so all outputs pass through a register (registered PLDs) — useful for counters and state machines. FPLA (field-programmable logic array): both the AND and the OR arrays are programmable; used in state machines that need many product terms, but it was not as widely accepted. GAL (generic array logic): an EEPROM array forms the programmable matrix, so it can be erased and reprogrammed at least 100 times; its programmable output logic macrocells (OLMCs) let one GAL replace most PAL devices pin-for-pin.",
+   "keywords": [
+    "PROM",
+    "PAL",
+    "FPLA",
+    "PLA",
+    "GAL",
+    "registered PLD",
+    "OLMC",
+    "macrocell",
+    "EEPROM"
+   ],
+   "pages": [
+    13,
+    14,
+    15,
+    16
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch13-13-4-max7000s",
+   "section": "13-4/13-5",
+   "topic": "Altera MAX7000S / MAX II CPLD architecture",
+   "type": "concept",
+   "summary": "A CPLD is several SPLD-like logic array blocks (LABs of 16 macrocells) joined by a programmable interconnect array (PIA); macrocells give 5 product terms + a flip-flop; programmed in-system over JTAG (TDI, TDO, TMS, TCK).",
+   "text": "The Altera MAX7000S is an EEPROM-based CPLD. Its main structures are logic array blocks (LABs) and the programmable interconnect array (PIA). A LAB holds 16 macrocells and looks much like one SPLD; each macrocell has a programmable AND/OR circuit and a programmable register (flip-flop). The number of macrocells is in the part number (EPM7128S has 128). The PIA is a global bus that connects all signal sources and destinations; up to 36 signals can feed each LAB from it. I/O pins connect to specific macrocells, and their number depends on the package; macrocells without a pin are used for internal logic. Four dedicated input pins can be high-speed controls or general inputs: GCLK1 (primary global clock), GCLK2 (secondary clock), OE1 (tristate enable) and GCLRn (asynchronous clear for any macrocell). I/O control blocks set each pin as input, output or bidirectional; the tristate buffer is permanently enabled/disabled, driven by a global output enable, or by other logic. In-system programming (ISP) uses the four JTAG pins TDI (test data in), TDO (test data out), TMS (test mode select) and TCK (test clock); during programming the I/O pins are tristated and pulled up. Each macrocell makes five product terms and can borrow more from neighbours in the same LAB; its output is combinational (register bypassed) or registered. The flip-flop can act as D, T, JK or SR, clocked by the global clock, the global clock with an enable, or an array clock from logic; all registers can be cleared by GCLRn and reset at power-up.",
+   "keywords": [
+    "CPLD",
+    "MAX7000S",
+    "MAX II",
+    "LAB",
+    "logic array block",
+    "PIA",
+    "macrocell",
+    "JTAG",
+    "ISP",
+    "TDI",
+    "TDO",
+    "TMS",
+    "TCK",
+    "GCLK"
+   ],
+   "pages": [
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ],
+   "needs_figure": true,
+   "figure_note": "MAX7000S block diagram: global inputs GCLK1/OE2/GCLK2/OE1/GCLRn at the top, four LABs (A–D, macrocells 1–16, 17–32, 33–48, 49–64) each with an I/O control block on its outer side, connected through the central PIA (36 signals into each LAB, 16 back out).",
+   "related_labs": []
+  },
+  {
+   "id": "ch13-13-6-fpga-lut",
+   "section": "13-6",
+   "topic": "FPGA look-up tables (LUT)",
+   "type": "concept",
+   "summary": "SRAM FPGAs (e.g. Altera Cyclone, Xilinx Spartan) make logic with look-up tables: a small SRAM (typically 16x1 for 4 inputs) holding the truth table, optionally registered, loaded at power-up.",
+   "text": "The Altera Cyclone series uses a different architecture from CPLDs, based on the look-up table (LUT). A LUT works like a truth table for a logic function: it is a small memory whose address inputs are the logic inputs and whose stored bits are the output column. A typical LUT has 4 inputs, so it is basically a 16 x 1 SRAM; its output can be used directly (combinational) or through a flip-flop (registered). Because the LUT contents are in SRAM, they are lost when power is removed and must be loaded (configured) every time the device powers up. SRAM devices built from LUTs are classified as FPGAs. The Spartan-7 FPGA on this course's EDGE board works the same way (it uses 6-input LUTs) and is configured with a .bit file.",
+   "keywords": [
+    "FPGA",
+    "LUT",
+    "look-up table",
+    "SRAM",
+    "Cyclone",
+    "configuration",
+    "truth table",
+    "Spartan-7",
+    "ตารางค้นหา",
+    "ตารางความจริงในหน่วยความจำ"
+   ],
+   "pages": [
+    24,
+    25
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch13-glossary",
+   "section": "13-0",
+   "topic": "คำย่อ: FPGA, CPLD, PLD, ASIC, VHDL, HDL, LUT, JTAG (Abbreviations)",
+   "type": "definition",
+   "summary": "FPGA = Field-Programmable Gate Array; CPLD = Complex Programmable Logic Device; PLD = Programmable Logic Device; ASIC = Application-Specific Integrated Circuit; VHDL = VHSIC (Very High-Speed Integrated Circuit) Hardware Description Language; HDL = Hardware Description Language.",
+   "text": "คำย่อที่ใช้บ่อยในวิชา: FPGA ย่อมาจาก Field-Programmable Gate Array (เกตอาร์เรย์ที่โปรแกรมได้ในภาคสนาม — ผู้ใช้กำหนดวงจรเองหลังผลิต โดยโหลดไฟล์ .bit). CPLD = Complex Programmable Logic Device. SPLD = Simple PLD. PLD = Programmable Logic Device. ASIC = Application-Specific Integrated Circuit (ไอซีที่ออกแบบเฉพาะงาน). VHDL ย่อมาจาก VHSIC Hardware Description Language โดย VHSIC = Very High-Speed Integrated Circuit — เป็นภาษาบรรยายฮาร์ดแวร์ (HDL, Hardware Description Language) ใช้ออกแบบวงจรดิจิทัลและระบบที่ใช้วงจรรวม แล้วสังเคราะห์ลง FPGA/CPLD (อีกภาษาหนึ่งคือ Verilog). LUT = Look-Up Table. JTAG = มาตรฐานพอร์ตทดสอบ/โปรแกรมชิป (TDI, TDO, TMS, TCK). MSI/SSI = Medium/Small-Scale Integration. TTL = Transistor-Transistor Logic, CMOS = Complementary MOS, ECL = Emitter-Coupled Logic.",
+   "keywords": [
+    "คำย่อ",
+    "ย่อมาจาก",
+    "FPGA",
+    "VHDL",
+    "VHSIC",
+    "HDL",
+    "CPLD",
+    "ASIC",
+    "PLD",
+    "abbreviation",
+    "Field-Programmable Gate Array",
+    "Hardware Description Language"
+   ],
+   "pages": [
+    4,
+    7,
+    24
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  }
+ ]
+}

@@ -34,6 +34,9 @@ LLAMA_PINNED = "b11016"     # used when the GitHub API can't be reached (rate li
 
 HF = "https://huggingface.co"
 CATALOG = [
+    {"id": "qwen3.5-4b-sft2", "name": "Qwen3.5 4B · ฝึกกับแอปนี้ (SFT2)", "size_gb": 3.5, "agent": True, "trained": True,
+     "note": "ฝึกต่อจากรุ่นแรก · ต่อสาย / แตกบล็อก / กู้ตัวจาก error / ตรวจก่อนตอบ ดีขึ้น (eval 41 % → 83 %) · การ์ดจอ 4–6 GB",
+     "file": "qwen3.5-4B-SFT2.gguf", "url": ""},
     # fine-tuned on this app's own agent / Q&A conversations (tools/dataset, train_lora.py): same tools, same
     # system prompt. Not hosted yet ("url" empty): the file is added with "นำเข้าไฟล์ .gguf" (import_model)
     {"id": "qwen3.5-4b-sft1", "name": "Qwen3.5 4B · ฝึกกับแอปนี้ (SFT1)", "size_gb": 3.5, "agent": True, "trained": True,
@@ -69,8 +72,16 @@ CATALOG = [
 # -np 1: one chat at a time (the default is 4 slots, each with its own buffers);
 # --cache-ram 1024: llama-server keeps old prompts in system RAM to reuse them, 8 GB by default —
 # with the agent's long, growing prompts that filled a 24 GB laptop to 100 % (1.1.0 / 1.1.1).
-DEFAULT_ARGS = "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 1024"
-OLD_DEFAULT_ARGS = ("-c 8192 --jinja -ngl 999", "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0")
+# -c 24576: the agent's prompts stay under ~14k tokens; a 64K context made a 3.5 GB model take 6.4 GB
+# (the KV cache is allocated in full at start), and with the editor + browser that left ~1 GB free — the
+# page was reloaded by the browser and MCP calls timed out. --cache-ram 256 for the same reason.
+# -fitt 512: --fit leaves 1 GB of VRAM free by default; 512 MB puts more layers on the GPU. Qwen3.5 9B Q4 on an
+# RTX 4050 6 GB (assistant prompt, 1.3k tokens): 16.5 → 19 token/s, prompt 615 → 730 t/s, 4.1 → 4.5 GB VRAM.
+# (-nkvo, the KV cache in RAM, was slower: 11 token/s — Qwen3.5's KV cache is small, the layers matter.)
+DEFAULT_ARGS = "-c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256 -fitt 512"
+OLD_DEFAULT_ARGS = ("-c 8192 --jinja -ngl 999", "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0",
+                    "-c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 1024",
+                    "-c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256")
 
 # semantic search over the course notes (RAG): a small embedding model on its own llama-server,
 # CPU-only (-ngl 0) so the GPU stays with the chat model. Kept in models/embed/ so it is never
@@ -80,8 +91,11 @@ EMBED = {"id": "qwen3-embedding-0.6b", "name": "Qwen3-Embedding 0.6B", "size_gb"
          "file": "Qwen3-Embedding-0.6B-Q8_0.gguf",
          "url": HF + "/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf"}
 EMBED_PORT = {"port": 0}          # a free port picked at start (a fixed one could be taken by anything)
-# -t / -tb 4: indexing the notes (once) must not take every core from the editor and the chat model
-EMBED_ARGS = "--embedding --pooling last -ngl 0 -c 4096 -b 4096 -ub 4096 -np 1 --cache-ram 0 -t 4 -tb 4"
+# -t / -tb 4: indexing the notes (once) must not take every core from the editor and the chat model.
+# -b / -ub 1024: the compute buffer grows with the batch — at 4096 a 0.6 GB model took 3.5 GB of RAM.
+# One input must fit in a batch, so the app sends at most EMBED_CHARS characters per note.
+EMBED_ARGS = "--embedding --pooling last -ngl 0 -c 1024 -b 1024 -ub 1024 -np 1 --cache-ram 0 -t 4 -tb 4"
+EMBED_CHARS = 1200
 
 CTX = {"data": Path("."), "log": Path("llama-server.log")}
 
@@ -386,12 +400,13 @@ def llama_processes(fresh: bool = False) -> list:
     if os.name == "nt":
         try:
             ps = ("Get-CimInstance Win32_Process -Filter \"name='llama-server.exe'\" | "
-                  "Select-Object ProcessId,ExecutablePath,WorkingSetSize | ConvertTo-Json -Compress")
+                  "Select-Object ProcessId,ExecutablePath,WorkingSetSize,PrivatePageCount,CommandLine | ConvertTo-Json -Compress")
             r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=15, creationflags=_NO_WINDOW)
             data = json.loads(r.stdout.decode("utf-8", "replace") or "[]")
             for d in ([data] if isinstance(data, dict) else data or []):
                 out.append({"pid": int(d.get("ProcessId") or 0), "path": d.get("ExecutablePath") or "",
-                            "mb": round(int(d.get("WorkingSetSize") or 0) / 2**20)})
+                            "mb": round(int(d.get("PrivatePageCount") or d.get("WorkingSetSize") or 0) / 2**20),   # private, as Task Manager's "Memory"
+                            "args": str(d.get("CommandLine") or "")[:400]})
         except Exception:
             pass
     else:
@@ -402,7 +417,8 @@ def llama_processes(fresh: bool = False) -> list:
                 if not prog:
                     continue
                 rss = next((int(x.split()[1]) for x in (d / "status").read_text().splitlines() if x.startswith("VmRSS:")), 0)
-                out.append({"pid": int(d.name), "path": prog, "mb": round(rss / 1024)})
+                out.append({"pid": int(d.name), "path": prog, "mb": round(rss / 1024),
+                            "args": " ".join(x.decode("utf-8", "replace") for x in args[1:])[:400]})
             except Exception:
                 continue
     for p in out:
@@ -495,6 +511,30 @@ STRAYS = {"stopped": []}
 
 def running() -> bool:
     return PROC is not None and PROC.poll() is None
+
+
+def with_overrides(args: str, ctx=None, cache_ram=None) -> str:
+    """args with -c / --cache-ram replaced by the settings' numbers (when set)."""
+    a = (args or "").split()
+
+    def put(flags, val):
+        nonlocal a
+        out, i = [], 0
+        while i < len(a):
+            if a[i] in flags:
+                i += 2
+                continue
+            out.append(a[i])
+            i += 1
+        a = out + [flags[0], str(val)]
+    try:
+        if ctx is not None and int(ctx) > 0:
+            put(("-c", "--ctx-size"), int(ctx))
+        if cache_ram is not None and int(cache_ram) >= 0:
+            put(("--cache-ram", "-cram"), int(cache_ram))
+    except (TypeError, ValueError):
+        pass
+    return " ".join(a)
 
 
 def start(server: str, model: str, endpoint: str, args: str) -> dict:

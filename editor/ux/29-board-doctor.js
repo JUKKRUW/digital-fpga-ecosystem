@@ -37,12 +37,16 @@ function boardDoctor(sch){
   const miss=bits.filter(b=>!b.t);
   if(miss.length) add("err",`ยังไม่ได้เลือกขา ${miss.length} ขา: ${miss.slice(0,6).map(b=>b.key).join(", ")}${miss.length>6?" …":""}`,
     "Vivado ต้องรู้ว่าทุกขาของวงจรต่อกับอะไรบนบอร์ด ไม่งั้น build ไม่ผ่าน","ไปหน้าเลือกขา แล้วกด “เดาขาให้” หรือเลือกเอง","pins");
-  const byT={}; bits.filter(b=>b.t).forEach(b=>(byT[b.t]=byT[b.t]||[]).push(b.key));
-  Object.entries(byT).filter(([,ks])=>ks.length>1).forEach(([t,ks])=>
-    add("err",`${ks.join(" กับ ")} ใช้ขาเดียวกัน (${pinTargetLabel(t)})`,"ขาจริงหนึ่งขาต่อได้กับสัญญาณเดียว — Vivado จะ error","เปลี่ยนขาของตัวใดตัวหนึ่ง","pins"));
+  // by PACKAGE pin: LCD data 0 and LED 7 are both M4 — two targets, one wire on the board
+  const byP={}; bits.filter(b=>b.t).forEach(b=>{ const p=BOARD_PINS[b.t]||b.t; (byP[p]=byP[p]||[]).push(b); });
+  Object.entries(byP).filter(([,bs])=>bs.length>1).forEach(([p,bs])=>{
+    const same=bs.every(b=>b.t===bs[0].t);
+    add("err",`${bs.map(b=>b.key).join(" กับ ")} ใช้ขาเดียวกัน (${same?pinTargetLabel(bs[0].t):bs.map(b=>pinTargetLabel(b.t)).join(" = ")})`,
+      same?"ขาจริงหนึ่งขาต่อได้กับสัญญาณเดียว — Vivado จะ error":`บนบอร์ด ${[...new Set(bs.map(b=>b.t))].join(" กับ ")} คือขา ${p} ขาเดียวกัน (เช่นสาย data ของ LCD ใช้ขาเดียวกับ LED 7…0) — Vivado จะ error`,
+      "เปลี่ยนขาของตัวใดตัวหนึ่ง","pins"); });
   bits.filter(b=>b.t).forEach(b=>{ const k=b.t.split(":")[0];
-    if(b.dir==="in" && ["led","seg","an","buzzer"].includes(k)) add("err",`INPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"LED / 7-seg เป็นของที่บอร์ด “แสดง” — รับค่าจากมันไม่ได้","ให้ INPUT ใช้สวิตช์ (SW) หรือปุ่ม","pins");
-    if(b.dir==="out" && ["sw","pb","clk"].includes(k)) add("err",`OUTPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"สวิตช์/ปุ่ม/นาฬิกาเป็นของที่ “ส่งค่าเข้า” วงจร — ส่งออกไปไม่ได้","ให้ OUTPUT ใช้ LED หรือ 7-seg","pins"); });
+    if(b.dir==="in" && !PIN_IN_TARGETS.includes(b.t)) add("err",`INPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"LED / 7-seg / LCD เป็นของที่บอร์ด “แสดง” — รับค่าจากมันไม่ได้","ให้ INPUT ใช้สวิตช์ (SW) หรือปุ่ม","pins");
+    if(b.dir==="out" && !PIN_OUT_TARGETS.includes(b.t)) add("err",`OUTPUT ${b.key} ต่อกับ ${pinTargetLabel(b.t)}`,"สวิตช์/ปุ่ม/นาฬิกาเป็นของที่ “ส่งค่าเข้า” วงจร — ส่งออกไปไม่ได้","ให้ OUTPUT ใช้ LED, 7-seg หรือ LCD","pins"); });
   // --- the circuit itself (its own errors make the board meaningless too) ---
   try{ explainSim(sch).filter(x=>x.lvl==="err").slice(0,4).forEach(x=>add("err","วงจร: "+x.title, x.why, x.fix, "sim")); }catch(_){}
   let flat=null; try{ flat=flattenSchematic(sch).sch; }catch(_){}
@@ -76,12 +80,12 @@ function boardDoctor(sch){
     const b=bits.find(x=>x.port===sanId(c.params.name)&&x.bit==null)||{}, t=b.t||"";
     if(/^pb:/.test(t)) add("warn",`นาฬิกา ${c.params.name} มาจากปุ่มกด`,
       "หน้าสัมผัสปุ่มเด้ง (bounce) — กดหนึ่งครั้งอาจได้ขอบขาขึ้นหลายสิบครั้ง ตัวนับจะกระโดดข้ามหลายค่า",
-      "ใช้นาฬิกา 50 MHz + ตัวหารความถี่ แล้วใช้ปุ่มเป็น enable ผ่านชิ้นส่วน Debounce (แท็บ Modules ▸ ชิ้นส่วน)");
+      "ใช้นาฬิกา 50 MHz + ตัวหารความถี่ แล้วใช้ปุ่มเป็น enable ผ่านชิ้นส่วน Debounce (Tools ▸ คลังชิ้นส่วนและโมดูล)");
     else if(/^sw:/.test(t)) add("info",`นาฬิกา ${c.params.name} มาจากสวิตช์เลื่อน`,
       "ใช้ทดสอบทีละ clock ได้ แต่สวิตช์ก็เด้งได้บ้าง ถ้านับข้ามบางครั้งเป็นเพราะเรื่องนี้","");
     else if(t==="clk" && ffs.length<20 && (leds.length||segs.length)) add("warn",`วงจรใช้นาฬิกา 50 MHz ตรงๆ (มี flip-flop ${ffs.length} ตัว)`,
       "ค่าเปลี่ยน 50 ล้านครั้งต่อวินาที — ตาเห็น LED ติดสลัวๆ ค้าง ไม่เห็นการนับ",
-      "ถ้าอยากเห็นการนับ ใส่ตัวหารความถี่ (เช่น ÷50000000 = 1 Hz) ระหว่าง clk กับวงจร — แท็บ Modules ▸ ชิ้นส่วน ▸ หารความถี่");
+      "ถ้าอยากเห็นการนับ ใส่ตัวหารความถี่ (เช่น ÷50000000 = 1 Hz) ระหว่าง clk กับวงจร — Tools ▸ คลังชิ้นส่วนและโมดูล ▸ นาฬิกา / หารความถี่");
   });
   if(BRD.tools){ if(!BRD.tools.vivado) add("info","ยังไม่พบ Vivado","สร้าง .bit ไม่ได้จนกว่าจะติดตั้ง/ตั้งที่อยู่ของ Vivado","หน้า Home ▸ เริ่มต้นใช้งาน");
     if(!BRD.tools.openfpgaloader) add("info","ยังไม่พบ openFPGALoader","โหลดลงบอร์ดไม่ได้","ติดตั้งโปรแกรมรุ่นเต็ม (มี openFPGALoader มาด้วย)"); }

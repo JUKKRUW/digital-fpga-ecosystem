@@ -1,7 +1,7 @@
 {
  "train": 4771,
  "train_extra": 5125,
- "eval_tasks": 930,
+ "eval_tasks": 951,
  "train_by_category": {
   "general_thai": 716,
   "nl_fix": 429,
@@ -30,7 +30,8 @@
   "nl_fsm": 75,
   "nl_logic": 401,
   "nl_pins": 37,
-  "qa": 68
+  "qa": 68,
+  "nl_exam": 21
  },
  "available_by_category": {
   "nl_compose": 369,

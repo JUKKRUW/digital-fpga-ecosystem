@@ -88,6 +88,8 @@ Claude ──stdio──▶ mcp_server.py ──HTTP + token──▶ launcher (
   - An expectation identical to the table the sheet was built from proves nothing. The result says so
     (`independent: false`), and it does not count as verified.
   - `recognized` names the standard circuit the sheet is.
+- **`vhdl_block`:** a block whose inside is VHDL text (one entity + architecture); pins = its ports, placed with
+  `sheet` or `add_component {type:"vhdl:<name>"}`; the browser simulators run the text, Vivado gets it as written.
 - **`build_fsm`:** a state machine from a few lines (`inputs: x`, `state S0: z=0`, `S0 -> S1 when x`, `else`,
   Mealy `/ z=1`, `reset S0`) or an object. It is built from D flip-flops, checked clock by clock against the
   diagram, and the diagram becomes the sheet's acceptance test.
@@ -135,6 +137,7 @@ Claude ──stdio──▶ mcp_server.py ──HTTP + token──▶ launcher (
 - **`simulate`** also gives every port as one number (`table` / `values`; a bus or a group q0..q3) and a text `waveform`
   for flip-flop sheets.
 - **`probe {inside:"u"}`** gives the nets inside block `u` (or a path `u/v`), with its inputs from the whole circuit.
+- **`probe` bit ranges**: `inputs:{"sw[7:4]":5, "sw[1]":1}` sets a slice of a bus INPUT or of a numbered group `sw0..sw15`; other bits stay 0 (or come from a whole value given beside it).
 - **`check`** also reports a net with two drivers and logic whose output goes nowhere.
 - **`get_events {since, wait}`** waits for the next edit, so an outside tool can follow the user.
 
@@ -163,13 +166,15 @@ closest notes automatically, and can call `search_course` for more. Search is by
 (Settings ▸ โมเดล AI ▸ Qwen3-Embedding 0.6B, 640 MB), it also searches by meaning, in Thai or English. That
 model runs on the CPU, so the graphics card stays free for the chat model.
 
-### Module library (the Modules tab)
+### Module library (Tools ▸ คลังชิ้นส่วนและโมดูล)
 - **Versions:** saving over a module bumps its version. **`update_module`** brings placed copies up to date in place;
   **`where_used`** lists them. **`use_module`** also takes a library part kind (the standard lab modules).
 - `list_modules` shows the library. It is shared by every project in the editor.
 - `save_module` stores a sheet in the library, together with every sheet it uses as a block.
 - `use_module` places a module as a block, and `open_module` opens it as a sheet you can edit.
 - `delete_module` removes a module from the library.
+- `set_module_category` puts a module in a category of the library window: a built-in one (ตัวนับ, จอ 7-segment …),
+  `กองกลาง` (not sorted) or a new name. `list_modules` shows each module's `category`.
 
 ### Testing the app's own AI
 Claude can use the app's AI feature the same way the user does, and see what goes wrong:

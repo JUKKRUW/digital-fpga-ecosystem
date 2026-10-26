@@ -34,6 +34,8 @@ function aiagSystemPrompt(){
 "   Bigger designs: build the pieces, then ONE build_hierarchy call with every block, the top ports and all the",
 "   connections (buses by name: cnt.ones → cmp.a_lo) — never wire blocks with connect one pin at a time.",
 "   Edit with add_component, connect, disconnect, delete, update_component, or apply.",
+"   No part for it and awkward as gates (a lookup / ROM table, a state machine written as a case, an odd counter)?",
+"   vhdl_block {vhdl, sheet} — one entity + architecture; the sheet gets a port per entity port. Then check + simulate.",
 "3. After ANY change: call check AND simulate ON THE SHEET YOU CHANGED — pass its name as `sheet`. For logic you",
 "   derived, verify_truth_table with a formula written from the REQUIREMENT (not the table you built from — that",
 "   proves nothing). Look at `recognized` in the answer. Never say it works without that.",
@@ -164,7 +166,7 @@ async function aiAgentRun(msg, opts){
   const maxSteps=Math.max(1, Math.min(60, +opts.maxSteps||AIAG_MAX_STEPS)), budgetS=Math.max(10, +opts.budgetS||AIAG_BUDGET_S);
   const run={id:++AIAG.seq, message:prev?prev.message:msg, started:Date.now(), state:"running", steps:[], final:null, error:null,
              model_calls:0, tokens:{prompt:0, completion:0}, model_seconds:0, max_steps:maxSteps, budget_s:budgetS,
-             resumed_from:prev?prev.id:undefined, cancel:false, ctl:null, noEscalate:!!opts.noEscalate};
+             resumed_from:prev?prev.id:undefined, cancel:false, ctl:null, noEscalate:!!opts.noEscalate, wantEscalate:!!opts.wantEscalate};
   if(prev) msg=prev.message;
   AIAG.cur=run; AIAG.runs.push(run); if(AIAG.runs.length>20) AIAG.runs.shift();
   const status=aiagLine('<span class="ac-badge v">เอเจนต์</span> <span class="ag-live">กำลังคิด…</span> <button class="btn2 ag-stop" title="หยุดเอเจนต์ตอนนี้">⏹ หยุด</button>');
@@ -200,7 +202,7 @@ async function aiAgentRun(msg, opts){
       : [{role:"system", content:aiagSystemPrompt()+notes}, ...hist, {role:"user", content:msg}];
     run._messages=messages;
     // sheets changed and not yet checked / simulated on — the nudge names them
-    const needCheck=new Set(), needSim=new Set(), made=new Set();
+    const needCheck=new Set(), needSim=new Set(), made=new Set(); run.made=made;
     let nudges=0, unanswered=false, think=true, planned=false, circularN=0, stopAt=Infinity, stopWhy="", stall=0, gated=false;
     const built=new Set();          // sheet + what it was built from: the same rebuild twice is a loop
     let budgetStart=run.started;    // restarts when a bigger model takes over
@@ -245,7 +247,9 @@ async function aiAgentRun(msg, opts){
       // a plan in words but no call: the same model writes the call again under a JSON-schema grammar (49)
       if(!calls.length && typeof aiagStructuredCall==="function" && (run.structTries||0)<2 && stopAt===Infinity){
         const plan=[m.content, thought].filter(Boolean).join("\n").trim(), done=run.steps.some(x=>x.kind==="tool" && x.ok && !x.fast_path);
-        if(plan && aiagWantsChange(run.message) && (!done || /→|->|ต่อ|connect|แล้ว(ต่อ|ให้|วาง)|ต่อไป|next/i.test(plan))){
+        // only before any work: after tool work a closing summary ("clk → div5 …, ต่อครบแล้ว") was turned into a
+        // build over the top sheet (2.7.0), and mid-run replies into set_top_sheet / check calls nobody asked for (2.7.1)
+        if(plan && aiagWantsChange(run.message) && !done){
           run.structTries=(run.structTries||0)+1; live("แปลงแผนเป็นคำสั่ง…");
           const sc=await aiagStructuredCall(run, messages, plan);
           if(sc){ calls=[sc]; run.steps.push({kind:"nudge", text:`no call in the reply — ${sc.function.name} written under the tool's schema (constrained decoding)`}); } } }
@@ -293,8 +297,11 @@ async function aiAgentRun(msg, opts){
           aiagLine(aiagStepHtml(st), "step");
           // which sheet this call worked on: the tool's own answer, else its argument, else the one on screen
           const on=(r.ok && r.result && r.result.sheet) || args.sheet || (activeSch()||{}).name;
-          if(r.ok && AIAG_EDIT_OPS.has(tool) && on){ needCheck.add(on); needSim.add(on); }
-          if(r.ok && (AIAG_EDIT_OPS.has(tool) || /^build_/.test(tool)) && on) run.touched.add(on);
+          // a rename / pin change is not a logic change: nothing to simulate, no request to check it against
+          const cosmetic=/^(set_pins|auto_pins|pin_preset)$/.test(tool)
+            || (tool==="update_component" && Object.keys(args).every(k=>/^(sheet|ref|name|x|y|rot)$/.test(k)));
+          if(r.ok && AIAG_EDIT_OPS.has(tool) && on && !cosmetic){ needCheck.add(on); needSim.add(on); }
+          if(r.ok && (AIAG_EDIT_OPS.has(tool) || /^build_/.test(tool)) && on && !cosmetic) run.touched.add(on);
           if(r.ok && tool==="check") needCheck.delete(on);
           const R=r.ok&&r.result||{}, circular=r.ok && (R.independent===false || R.pass===null || R.pending || (R.result&&(R.result.independent===false||R.result.pending)));
           // a spec still waiting for its circuit (set first, as asked) is not a failed check
@@ -320,6 +327,11 @@ async function aiAgentRun(msg, opts){
       // while the real one had a wrong carry): name the sheets and what is missing
       // a nudge answered with words only is not repeated: the model that cannot make the call there wrote
       // made-up results ("ผ่าน 1,000 จาก 1,000") each time it was pushed again (div25: 4 calls, 120 s)
+      // a sheet that already passed a check that counts (verify_truth_table / check_spec / the request's test)
+      // needs no more: the nudge used to fire after a passing verify_truth_table (SFT3 report N11)
+      [...new Set([...needCheck, ...needSim])].forEach(n=>{ const s=Object.values(state.project.schematics).find(x=>x.name===n);
+        const passed=(run.steps||[]).some(x=>x.kind==="tool" && x.ok && /^(verify_truth_table|check_spec|compare_sheets)$/.test(x.tool) && (x.args||{}).sheet===n && /"pass":true/.test(String(x.result||"")));
+        if(s && (passed || sheetVerified(s) || (run.verified && run.verified.sheet===n))){ needCheck.delete(n); needSim.delete(n); } });
       if(unanswered && typeof aiagUnansweredFinish==="function"){ run.final=await aiagUnansweredFinish(run, m.content, needCheck, needSim); break; }
       if((needCheck.size || needSim.size) && nudges<2 && stopAt===Infinity){
         nudges++; think=true; unanswered=true;
@@ -346,6 +358,7 @@ async function aiAgentRun(msg, opts){
       run.final=String(m.content||"").trim() || (didWork ? "(เอเจนต์ไม่ได้เขียนสรุป — ดูขั้นตอนด้านบน)" : "เอเจนต์ไม่ได้ทำอะไรในรอบนี้ (ไม่ได้เรียกเครื่องมือเลย) — ลองสั่งใหม่ให้ชัดขึ้น หรือแบ่งเป็นขั้นตอนเล็กลง");
       if(typeof aiagNoWorkGuard==="function") run.final=aiagNoWorkGuard(run, run.final, didWork, wantsChange);
       if(didWork && typeof aiagClaimGuard==="function") run.final=aiagClaimGuard(run, run.final);
+      if(didWork && typeof aiagFactGuard==="function") run.final=aiagFactGuard(run, run.final);
       break;
     }
     if(run.cancel && !run.final){ run.error="หยุดแล้ว ("+(run.cancelWhy||"สั่งหยุด")+")"; run.stopped=true; }
@@ -359,11 +372,33 @@ async function aiAgentRun(msg, opts){
   if(sb) sb.remove();
   aiagRemember(run);
   live(run.error?"หยุด":`เสร็จ · ${run.steps.filter(s=>s.kind==="tool").length} ขั้น · ${run.seconds} วิ`);
-  if(run.final) aiAppend("ai", run.final);
+  run.uid=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  const box=run.final ? aiAppend("ai", run.final) : null;
   if(run.error) aiAppend("ai", "เอเจนต์: "+run.error, {err:true});
-  try{ await aiagPost("/api/agent/log", {message:run.message, state:run.state, final:run.final, error:run.error, steps:run.steps,
-    model_calls:run.model_calls, tokens:run.tokens, seconds:run.seconds}); }catch(_){}
+  if(typeof aiagRateButtons==="function") aiagRateButtons(box || $("#acLog > .ac-msg:last-child"), run);
+  // the whole run, as the model saw it (system prompt, tool schemas by name, every message): with a 👍/👎
+  // from the user (ratings.jsonl, same folder) it is material for the next training round
+  let model=null; try{ model=((await (await fetch("/api/llm/status")).json())||{}).model||null; }catch(_){}
+  try{ await aiagPost("/api/agent/log", {uid:run.uid, message:run.message, state:run.state, final:run.final, error:run.error, steps:run.steps,
+    model_calls:run.model_calls, tokens:run.tokens, seconds:run.seconds, model, profile:run.profile, calls:run.calls,
+    escalated:run.escalated||undefined, tools:(AIAG.tools||[]).map(t=>t.function.name), messages:run._messages||undefined}); }catch(_){}
   return run;
+}
+
+/* 👍 / 👎 under an agent answer → /api/agent/rate (agent-runs/ratings.jsonl, keyed by the run's uid) */
+function aiagRateButtons(el, run){
+  if(!el || !run || !/^https?:/.test(location.protocol)) return;
+  const bar=document.createElement("div"); bar.className="ag-rate";
+  bar.innerHTML='<button data-r="1" title="คำตอบนี้ถูก / ใช้ได้">👍</button><button data-r="-1" title="คำตอบนี้ผิด / ทำไม่ได้">👎</button><span class="ag-rate-msg"></span>';
+  bar.addEventListener("click", async e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    const r=+b.dataset.r; let note="";
+    if(r<0){ note=prompt("ผิดตรงไหน? (ไม่ใส่ก็ได้ — ช่วยให้เทรนรอบหน้าได้ตรงจุด)", "")||""; }
+    bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on", x===b));
+    const msg=bar.querySelector(".ag-rate-msg");
+    try{ const j=await aiagPost("/api/agent/rate", {uid:run.uid, rating:r, note, message:run.message, final:run.final});
+      msg.textContent=j&&j.ok ? "บันทึกแล้ว" : "บันทึกไม่ได้"; }catch(_){ msg.textContent="บันทึกไม่ได้"; } });
+  el.after(bar);
 }
 
 /* ---- the chat's third mode: เอเจนต์ (local model + tools) ---- */
@@ -403,7 +438,7 @@ MCP_OPS.ai_chat = a=>{
     if(!prev || !prev.resumable) mcpFail("no run to resume"+(prev?` — run ${prev.id} ended with an answer or cannot be continued`:""), "resume works on a run stopped by ai_chat_stop, the step limit or the time budget, in this page (not after a reload)");
     a=Object.assign({}, a, {message:"(ทำต่อ) "+prev.message, mode:"agent"}); }
   const msg=String(a.message||"").trim(); if(!msg) mcpFail("message is required — what the user would type in the chat");
-  AIAG.nextOpts={maxSteps:a.max_steps, budgetS:a.budget_s, resume:prev, noEscalate:a.escalate===false, think:a.think, temperature:a.temperature};
+  AIAG.nextOpts={maxSteps:a.max_steps, budgetS:a.budget_s, resume:prev, noEscalate:a.escalate===false, wantEscalate:a.escalate===true, think:a.think, temperature:a.temperature};
   if(!AICHAT.open) toggleAiChat();
   if(a.mode){ if(!["build","qa","agent"].includes(a.mode)) mcpFail("mode is build | qa | agent"); aiSetMode(a.mode); }
   const t=$("#acInput"); t.value=msg;

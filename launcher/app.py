@@ -40,7 +40,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 APP_NAME = "FPGA Ecosystem"
 APP_ID = "fpga-ecosystem"
-VERSION = "2.6.0"
+VERSION = "2.8.6"
 
 FROZEN = getattr(sys, "frozen", False)
 # ROOT = where the bundled content lives (repo root in dev, _MEIPASS when frozen)
@@ -111,7 +111,16 @@ DEFAULTS = {
         "llm_endpoint": "http://127.0.0.1:8080/v1/chat/completions",
         "llama_server": "",       # path to llama-server(.exe) for llm=local
         "llama_model": "",        # path to a .gguf for llm=local
-        "llama_args": "",         # blank = llm.DEFAULT_ARGS (context 64K, tool calls, layers fitted to the GPU)
+        "llama_ctx": 0,           # >0 = context size (-c), over whatever llama_args says
+        "llama_cache_ram": -1,    # >=0 = --cache-ram MB, over whatever llama_args says
+        "llama_args": "",         # blank = llm.DEFAULT_ARGS (context 24K, tool calls, layers fitted to the GPU)
+        "assistant_backend": "llama",   # the chat's ถาม-ตอบ model: llama (the app's llama-server) | ollama | openai
+        "assistant_endpoint": "",       # ollama / openai: chat/completions URL (blank = Ollama's default)
+        "assistant_model": "",          # ollama / openai: model name
+        "assistant_tools": True,        # llama-ui: the model calls search_course / find_parts / app_help itself
+        "assistant_notes": True,        # without tools (and in the editor's chat): course notes in front of every question
+        "assistant_memory": True,       # remember what the user tells about themselves (<data>/assistant.sqlite)
+        "assistant_port": 8771,         # llama-ui behind the app's proxy (Home ▸ ผู้ช่วย AI); a fixed port keeps its chats
         "cosim": False,           # GHDL co-simulation check
         "ghdl": "",               # path to ghdl(.exe); blank = auto-detect
         "fpga": True,             # FPGA Builder (VHDL -> .bit -> board)
@@ -264,6 +273,15 @@ llm.init(DATA_DIR, CONFIG_DIR / "llama-server.log")
 
 
 def start_llama(force: bool = False) -> dict:
+    # config.json edited by hand while the app runs: take its llama_* values (the app's copy used to win,
+    # and the next save wrote the old ones back)
+    try:
+        disk = json.loads(CONFIG_FILE.read_text("utf-8")).get("features") or {}
+        for k in ("llama_args", "llama_ctx", "llama_cache_ram"):
+            if k in disk:
+                CFG["features"][k] = disk[k]
+    except Exception:
+        pass
     f = CFG["features"]
     if f.get("llm") != "local" and not force:
         return {"ok": False, "error": "llm is not local"}
@@ -271,8 +289,9 @@ def start_llama(force: bool = False) -> dict:
     if not (server and model):
         return {"ok": False, "error": "ยังไม่มี llama.cpp หรือไฟล์โมเดล"}
     args = (f.get("llama_args") or "").strip()
-    if not args or args in llm.OLD_DEFAULT_ARGS:      # the old fixed -ngl 999 / 8K context
+    if not args or args in llm.OLD_DEFAULT_ARGS:      # the old fixed -ngl 999 / 8K context / 64K context
         args = llm.DEFAULT_ARGS
+    args = llm.with_overrides(args, f.get("llama_ctx"), f.get("llama_cache_ram"))
     return llm.start(server, model, f.get("llm_endpoint"), args)
 
 
@@ -429,8 +448,23 @@ def rag_vectors(r):
                   + (f" — last error: {_EMB['err']}" if _EMB["err"] else "") + "; keyword search meanwhile")
 
 
+EMBED_IDLE = {"t": 0.0, "watch": False}
+EMBED_IDLE_S = 600      # the embedding server is only needed for a search: stopped after 10 idle minutes
+
+
+def _embed_idle_watch():
+    while True:
+        time.sleep(30)
+        if llm.embed_running() and not _EMB["busy"] and time.time() - EMBED_IDLE["t"] > EMBED_IDLE_S:
+            llm.stop_embed()
+
+
 def _embed_ready(wait: float) -> bool:
     """Start the embedding server if needed and wait (≤ wait s) until it answers."""
+    EMBED_IDLE["t"] = time.time()
+    if not EMBED_IDLE["watch"]:
+        EMBED_IDLE["watch"] = True
+        threading.Thread(target=_embed_idle_watch, daemon=True).start()
     server, _ = detect_llama()
     if not llm.embed_running() and not llm.start_embed(server).get("ok"):
         return False
@@ -454,7 +488,7 @@ def _rag_index(r, key, cache):
         if not _embed_ready(300):
             raise RuntimeError("the embedding server did not start (see llama-embed.log)")
         vecs = []
-        texts = [((d.get("title") or "") + "\n" + (d.get("text") or ""))[:2000] for d in r.docs]
+        texts = [((d.get("title") or "") + "\n" + (d.get("text") or ""))[:llm.EMBED_CHARS] for d in r.docs]
         for i in range(0, len(texts), 16):
             vecs += llm.embed(texts[i:i + 16], timeout=600)
             _EMB["done"] = len(vecs)
@@ -504,6 +538,175 @@ def rag_search(query: str, k: int = 5, group: str = "", semantic: bool = True, p
     return res
 
 
+def _assistant_mods():
+    ai = str(ROOT / "ai")
+    if ai not in sys.path:
+        sys.path.insert(0, ai)
+    from assistant import backend as AB, chat as AC
+    return AB, AC
+
+
+def assistant_backend():
+    AB, _ = _assistant_mods()
+    be = AB.from_features(CFG["features"])
+    if be.kind == "llama":      # Settings ▸ AI off points AI_ENDPOINT at a closed port: the chat says so
+        be.endpoint = os.environ.get("AI_ENDPOINT") or be.endpoint
+    return be
+
+
+_ASSIST = {"mem": None, "proxy": None, "error": ""}
+
+
+def assistant_memory():
+    """The memory store (<data>/assistant.sqlite), or None when Settings turned memory off."""
+    if not CFG["features"].get("assistant_memory", True):
+        return None
+    if _ASSIST["mem"] is None:
+        _assistant_mods()
+        from assistant import memory as AM
+        _ASSIST["mem"] = AM.Store(DATA_DIR / "assistant.sqlite")
+    return _ASSIST["mem"]
+
+
+def assistant_toolbox():
+    if _ASSIST.get("tools") is None:
+        _assistant_mods()
+        from assistant import tools as AT
+        _ASSIST["tools"] = AT.Toolbox(lambda q, k: (rag_search(q, k=k, semantic=llm.embed_running(),
+                                                                prefer_verified=False) or {}).get("hits") or [])
+    return _ASSIST["tools"]
+
+
+def assistant_augment(q: str) -> dict:
+    """What llama-ui's question gets from the app (proxy.Hooks.augment): the system prompt and the memories
+    that match it; with assistant_tools on (the default) the model looks up course notes, the app's part
+    library and how-tos itself (tools.py) — off, the course notes go in front of every question."""
+    if not CFG["features"].get("ai"):
+        return {}
+    _, AC = _assistant_mods()
+    from assistant import memory as AM
+    from assistant import tools as AT
+    use_tools = CFG["features"].get("assistant_tools", True)
+    parts, hits = [], []
+    if not use_tools and CFG["features"].get("assistant_notes", True):
+        try:
+            hits = (rag_search(q, k=AC.NOTES_K, semantic=llm.embed_running(), prefer_verified=False) or {}).get("hits") or []
+        except Exception:
+            hits = []
+    nb = AC.notes_block(hits)
+    if nb:
+        parts.append(nb)
+    store = assistant_memory()
+    if store is not None:
+        said = AM.explicit(q)
+        if said:
+            store.add(said, "fact")
+            parts.append(f"[ระบบ: บันทึกลงความจำแล้วว่า \"{said}\" — ตอบรับสั้น ๆ]")
+        mb = AM.block(store.search(q))
+        if mb:
+            parts.append(mb)
+    return {"system": AC.system(tools=use_tools), "prefix": "\n\n".join(parts) + ("\n\n[คำถาม]\n" if parts else ""),
+            "sources": AC.sources(hits), "tools": AT.SCHEMAS if use_tools else None,
+            "prefetch": AT.prefetch(q) if use_tools else []}
+
+
+def assistant_after(q: str, answer: str) -> None:
+    """After an answer in llama-ui: let the model pick what to remember from the user's message."""
+    store = assistant_memory()
+    if store is None:
+        return
+    from assistant import memory as AM
+    if AM.should_extract(q):
+        for it in AM.extract(assistant_backend(), q):
+            store.add(it["text"], it.get("kind") or "fact")
+
+
+def assistant_ui_start(port: int) -> None:
+    _assistant_mods()
+    from assistant import proxy as AP
+    up = lambda: (os.environ.get("AI_ENDPOINT") or CFG["features"]["llm_endpoint"]).split("/v1/", 1)[0]
+    def touch():        # llama-ui open = the app is in use (the watchdog quits after IDLE_SECONDS without)
+        global LAST_PING
+        LAST_PING = time.time()
+    from assistant import compact as ACP
+    count, n_ctx = ACP.server_hooks(up)
+    summarize = lambda sys_, text: assistant_backend().complete(
+        [{"role": "system", "content": sys_}, {"role": "user", "content": text}],
+        think=False, temperature=0.3, max_tokens=ACP.SUMMARY_TOKENS, timeout=300)["text"]
+    _ASSIST["compact"] = ACP.Compactor(summarize, count, n_ctx)
+    _ASSIST["proxy"] = AP.serve(AP.Hooks(up, assistant_augment, assistant_after, touch,
+                                         lambda name, args, sources: assistant_toolbox().call(name, args, sources),
+                                         _ASSIST["compact"].apply, _ASSIST["compact"].command), port)
+
+
+def assistant_ui_ensure() -> str:
+    """The assistant page's URL; starts the proxy now if it did not come up with the app (and says why not)."""
+    if not _ASSIST["proxy"]:
+        try:
+            assistant_ui_start(int(CFG["features"].get("assistant_port") or 8771))
+            _ASSIST["error"] = ""
+        except Exception as e:
+            traceback.print_exc()
+            _ASSIST["error"] = f"{type(e).__name__}: {e}"
+    return assistant_ui_url()
+
+
+def assistant_ui_url() -> str:
+    p = _ASSIST["proxy"]
+    return f"http://127.0.0.1:{p.server_address[1]}/" if p else ""
+
+
+def assistant_chat(data: dict, send) -> None:
+    """The chat's ถาม-ตอบ mode, streamed to `send(event) -> bool`: sources (course notes), then
+    think / text pieces as the model writes them, then done (or error). `send` returning False
+    (the page closed or pressed stop) closes the model request, and llama-server stops generating."""
+    q = str(data.get("message") or "").strip()
+    if not q:
+        send({"type": "error", "error": "empty message"})
+        return
+    if not CFG["features"].get("ai"):
+        send({"type": "error", "error": "ฟีเจอร์ AI ปิดอยู่ (เปิดได้ที่หน้า ตั้งค่า)"})
+        return
+    AB, AC = _assistant_mods()
+    hits = []
+    if data.get("notes", True):
+        try:        # semantic side only when the embedding server is already up: a question must not wait for it
+            hits = (rag_search(q, k=AC.NOTES_K, semantic=llm.embed_running(), prefer_verified=False) or {}).get("hits") or []
+        except Exception:
+            hits = []
+    if not send({"type": "sources", "sources": AC.sources(hits)}):
+        return
+    be = assistant_backend()
+    think = bool(data.get("think"))
+    max_tokens = int(data.get("max_tokens") or (6144 if think else 2048))
+    from assistant import memory as AM
+    store, mems = assistant_memory(), ""
+    if store is not None:
+        said = AM.explicit(q)
+        if said:
+            store.add(said, "fact")
+            mems = f"[ระบบ: บันทึกลงความจำแล้วว่า \"{said}\" — ตอบรับสั้น ๆ]\n\n"
+        mems += AM.block(store.search(q))
+    msgs = AC.messages(q, hits, str(data.get("sheet") or ""), data.get("history") or [], mems.strip())
+    t0 = time.time()
+    gen = be.stream(msgs, think=think, max_tokens=max_tokens)
+    answer = []
+    try:
+        for ev in gen:
+            if ev["type"] == "done":
+                ev = dict(ev, elapsed_s=round(time.time() - t0, 2), backend=be.kind)
+                threading.Thread(target=assistant_after, args=(q, "".join(answer)), daemon=True).start()
+            elif ev["type"] == "text":
+                answer.append(ev["text"])
+            if not send(ev):
+                return
+    except AB.BackendError as e:
+        send({"type": "error", "error": str(e), "hint": "เปิดโมเดลได้ที่ หน้าหลัก ▸ ตั้งค่า ▸ โมเดล AI",
+              "log_tail": llm.log_tail(12) if be.kind == "llama" else ""})
+    finally:
+        gen.close()
+
+
 def agent_log(rec: dict) -> dict:
     """Every agent run, one JSON line per run: material for examples (RAG) and for finding what goes wrong."""
     d = CONFIG_DIR / "agent-runs"
@@ -512,6 +715,23 @@ def agent_log(rec: dict) -> dict:
     with open(f, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(dict(rec, t=time.time()), ensure_ascii=False) + "\n")
     return {"ok": True, "file": str(f)}
+
+
+def agent_rate(rec: dict) -> dict:
+    """👍 / 👎 on an agent answer, by the run's uid (the run itself is in the month's file)."""
+    try:
+        rating = int(rec.get("rating"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "rating is 1 or -1"}
+    if rating not in (1, -1) or not str(rec.get("uid") or "").strip():
+        return {"ok": False, "error": "uid and rating (1 / -1) are required"}
+    d = CONFIG_DIR / "agent-runs"
+    d.mkdir(parents=True, exist_ok=True)
+    row = {"uid": str(rec["uid"])[:40], "rating": rating, "note": str(rec.get("note") or "")[:2000],
+           "message": str(rec.get("message") or "")[:2000], "final": str(rec.get("final") or "")[:4000], "t": time.time()}
+    with open(d / "ratings.jsonl", "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return {"ok": True}
 
 
 def llm_up() -> bool:
@@ -532,6 +752,7 @@ PAGES = {
     # Top-Down and the board build live inside Schematic Studio (one program, the circuit follows)
     "topdown": "/studio.html?view=topdown",
     "board": "/studio.html?view=board",
+    "assistant": "",        # llama-ui behind the assistant proxy (assistant_ui_url)
 }
 
 
@@ -542,6 +763,10 @@ def base_url() -> str:
 def open_window(page: str = "home", query: str = "") -> None:
     path = PAGES.get(page, "/")
     url = base_url() + path + ((("&" if "?" in path else "?") + query) if query else "")
+    if page == "assistant":
+        url = assistant_ui_ensure()
+        if not url:            # /api/open answers the error; Home shows it (it used to open Home again, silently)
+            return
     browser = find_browser()
     if browser:
         prof = CONFIG_DIR / "browser"
@@ -836,6 +1061,7 @@ class McpRelay:
         self.waiting = set()    # job ids a caller is still waiting for
         self.replies = {}       # job id -> reply
         self.late = {}          # job id -> op, for a call that gave up while the editor still ran it
+        self.late_t = {}        # job id -> when it was given up (entries older than an hour are dropped)
         self.finished = []      # [(time, job id, op, reply)] — late answers kept for last_result
         self.n = 0
         self.opened_at = 0.0
@@ -880,9 +1106,14 @@ class McpRelay:
             self.cv.notify_all()
 
     def forget(self, client):
+        """The page closed or reloaded: what it ran or had queued is gone with it (a reloaded page left
+        job j2853 listed as running forever)."""
         with self.cv:
             self.seen.pop(client, None)
-            self.running.pop(client, None)
+            r = self.running.pop(client, None)
+            self.jobs.pop(client, None)
+            if r:
+                self.late.pop(r[0], None)
             self.cv.notify_all()
 
     def busy(self, client):
@@ -923,7 +1154,7 @@ class McpRelay:
         with self.cv:
             self.n += 1
             jid = f"j{self.n}"
-            self.jobs.setdefault(client, []).append({"id": jid, "op": op, "args": args or {}})
+            self.jobs.setdefault(client, []).append({"id": jid, "op": op, "args": args or {}, "timeout": timeout})
             self.waiting.add(jid)
             self.cv.notify_all()
             start = time.time()
@@ -947,6 +1178,7 @@ class McpRelay:
                             return {"ok": False, "error": f"the editor did not pick up '{op}' within {int(timeout)} s",
                                     "hint": "is the Schematic Studio window frozen or showing a dialog?"}
                         self.late[jid] = op
+                        self.late_t[jid] = time.time()
                         return {"ok": False, "error": f"'{op}' is still running in the editor after {int(timeout)} s",
                                 "job": jid,
                                 "hint": f"it finishes on its own — do NOT send it again; call last_result {{\"job\": \"{jid}\"}} "
@@ -961,6 +1193,9 @@ class McpRelay:
     def last_result(self, job=None, op=None):
         """The answer of a call that ran past its caller's timeout (newest first)."""
         with self.cv:
+            for jid in [j for j, t in self.late_t.items() if time.time() - t > 3600 or j not in self.late]:
+                self.late.pop(jid, None)
+                self.late_t.pop(jid, None)
             for t, jid, o, reply in reversed(self.finished):
                 if (job and jid == job) or (not job and (not op or o == op)):
                     return {"ok": True, "job": jid, "op": o, "finished_s_ago": int(time.time() - t), "reply": reply}
@@ -1277,6 +1512,14 @@ def make_handler():
                 server, model = detect_llama()
                 return self._out(200, dict(llm.status(CFG["features"]["llm_endpoint"], server, model),
                                            mode=CFG["features"].get("llm"), backend_up=llm_up()))
+            if path == "/api/assistant/status":
+                AB, _ = _assistant_mods()
+                be = assistant_backend()
+                return self._out(200, dict(be.probe(), ok=True, backend=be.kind, endpoint=be.endpoint, ui=assistant_ui_url(),
+                                           ollama_models=AB.ollama_models() if be.kind == "ollama" else []))
+            if path == "/api/assistant/memories":
+                store = assistant_memory()
+                return self._out(200, {"ok": True, "enabled": store is not None, "memories": store.all() if store else []})
             if path == "/api/setup/check":
                 return self._out(200, setup_check())
             if path == "/api/board/status":
@@ -1323,7 +1566,11 @@ def make_handler():
                 return self._out(200, {"ok": True, "path": str(f), "project": proj, "name": name})
             data = json.loads(self._body() or b"{}")
             if path == "/api/open":
-                open_window(data.get("page", "home"), data.get("query", ""))
+                page = data.get("page", "home")
+                open_window(page, data.get("query", ""))
+                if page == "assistant" and not assistant_ui_url():
+                    return self._out(200, {"ok": False, "error": "เปิดผู้ช่วย AI ไม่ได้: " + (_ASSIST["error"] or "ตัวกลาง (proxy) ไม่ทำงาน")
+                                           + " — ดูรายละเอียดใน app.log ในโฟลเดอร์ตั้งค่า"})
                 return self._out(200, {"ok": True})
             if path == "/api/open_project":
                 rel = data.get("path") or ""
@@ -1341,6 +1588,8 @@ def make_handler():
                     return self._out(200, llm.cancel_download())
                 if path == "/api/llm/stop":
                     return self._out(200, llm.stop())
+                if path == "/api/llm/stop_embed":
+                    return self._out(200, llm.stop_embed())
                 if path == "/api/llm/start":
                     f = CFG["features"]
                     if data.get("model"):
@@ -1356,6 +1605,38 @@ def make_handler():
                 if path == "/api/llm/chat":
                     return self._out(200, llm_chat(data))
                 return self._out(404, {"ok": False, "error": "unknown api"})
+            if path == "/api/assistant/chat":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+
+                def send(ev):
+                    try:
+                        self.wfile.write(("data: " + json.dumps(ev, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                        return True
+                    except Exception:
+                        return False
+                assistant_chat(data, send)
+                self.close_connection = True
+                return
+            if path == "/api/assistant/memories":       # Settings ▸ สิ่งที่ AI จำ: add / edit / pin / delete / clear
+                if "enabled" in data:
+                    CFG["features"]["assistant_memory"] = bool(data["enabled"])
+                    save_config(CFG)
+                store = assistant_memory()
+                act = data.get("action")
+                if store is not None and act:
+                    if act == "add":
+                        store.add(str(data.get("text") or ""), str(data.get("kind") or "fact"))
+                    elif act == "update":
+                        store.update(int(data["id"]), data.get("text"), data.get("kind"), data.get("pinned"))
+                    elif act == "delete":
+                        store.delete(int(data["id"]))
+                    elif act == "clear":
+                        store.clear()
+                return self._out(200, {"ok": True, "enabled": store is not None, "memories": store.all() if store else []})
             if path.startswith("/api/agent/"):
                 import mcp_server as MS         # tool schemas + argument checks, shared with the MCP server
                 if path == "/api/agent/tools":
@@ -1368,6 +1649,8 @@ def make_handler():
                     return self._out(200, {"ok": not err, "args": args, "error": err})
                 if path == "/api/agent/log":
                     return self._out(200, agent_log(data))
+                if path == "/api/agent/rate":
+                    return self._out(200, agent_rate(data))
                 return self._out(404, {"ok": False, "error": "unknown api"})
             if path.startswith("/api/board/"):
                 if not CFG["features"].get("fpga"):
@@ -1539,6 +1822,7 @@ def main(argv=None):
         HTTPD = _bind(0)
     SERVER_PORT = HTTPD.server_address[1]
     write_runtime()
+    assistant_ui_ensure()
     # a model server from our llama folder running now was left by an earlier run (closed by the updater,
     # a crash): it holds RAM / VRAM for nothing — stop it before anything else
     if not start_llama().get("ok"):                  # (a start stops them itself)

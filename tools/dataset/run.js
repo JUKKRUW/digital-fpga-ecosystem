@@ -75,6 +75,19 @@ function checkInPage({ t, sheet }) {
     const pm = s.pinmap || {}, bad = Object.entries(t.map).filter(([k, v]) => pm[k] !== v).map(([k, v]) => `${k}: ${pm[k]} ≠ ${v}`);
     return { ok: !bad.length, why: bad.join(", ") };
   }
+  if (t.cat === "nl_exam") {                             // streams / rows computed by gen_exam.py's own reference models
+    const c = t.check, part = { ports: () => c.ports };
+    if (c.kind === "seq") {
+      part.seq = () => ({ cycles: c.inputs.length, init: 0, drive: i => c.inputs[i] || {},
+        step: (i) => ({ out: Object.fromEntries(Object.entries(c.expect).map(([o, L]) => [o, L[i]])), state: i + 1 }) });
+      const v = partVerifySeq(s, part, {});
+      return { ok: v.pass, why: v.pass ? "" : JSON.stringify(v.mismatch).slice(0, 300) };
+    }
+    const key = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]])), M = new Map(c.rows.map(([i, o]) => [key(i), o]));
+    part.ref = v => M.get(key(v)) || null;
+    const v = partVerifyComb(s, part, {});
+    return { ok: v.pass, why: v.pass ? "" : JSON.stringify(v.mismatch).slice(0, 300) };
+  }
   return { ok: false, why: "no check for " + t.cat };
 }
 

@@ -38,15 +38,36 @@ function acNumber(v, w){
 function acSplitGroups(sch, inputs){
   if(!inputs || typeof inputs!=="object") return inputs;
   const ins=sch.components.filter(c=>c.type==="IN"), has=n=>ins.some(c=>String(c.params.name).toLowerCase()===String(n).toLowerCase());
-  const out={};
+  const out={}, bus={};
+  const groupBits=n=>{ const bits=[]; ins.forEach(c=>{ const m=/^(.*?)_?(\d+)$/.exec(String(c.params.name)); if(m && m[1].toLowerCase()===String(n).toLowerCase() && (c.params.width||1)===1) bits[+m[2]]=c.params.name; }); return bits; };
   Object.entries(inputs).forEach(([n,v])=>{
+    // a bit range: sw[7:4] / sw[3] — of a bus INPUT, or of a numbered group sw0..sw15
+    const r=/^\s*([A-Za-z_][\w]*)\s*\[\s*(\d+)\s*(?::\s*(\d+)\s*)?\]\s*$/.exec(n);
+    if(r && !has(n)){
+      const base=r[1], hi=Math.max(+r[2], +(r[3]??r[2])), lo=Math.min(+r[2], +(r[3]??r[2])), w=hi-lo+1;
+      const x=acNumber(v, w);
+      if(isNaN(x)) mcpFail(`'${n}' is ${w} bit(s): give one number`, `e.g. "${n}": ${Math.min(5,(1<<w)-1)} or "0b${"1".repeat(w)}"`);
+      if(x>=2**w) mcpFail(`${x} does not fit in ${n} (${w} bit${w>1?"s":""})`);
+      const c=ins.find(q=>String(q.params.name).toLowerCase()===base.toLowerCase());
+      if(c && (c.params.width||1)>1){ const W=c.params.width; if(hi>=W) mcpFail(`${base} is ${base}[${W-1}:0]: no bit ${hi}`);
+        const k=c.params.name, m=((2**w)-1)*2**lo; bus[k]=bus[k]||{v:0, m:0}; bus[k].v=(bus[k].v & ~m) | (x*2**lo); bus[k].m|=m; return; }
+      const bits=groupBits(base);
+      // a sparse group (sw1, sw2, sw3, sw5): every bit of the range must exist (slice/every skip holes)
+      const missing=[]; for(let i=lo;i<=hi;i++) if(!bits[i]) missing.push(base+i);
+      if(bits.filter(Boolean).length && missing.length) mcpFail(`no INPUT ${missing.join(", ")} — '${n}' needs every bit from ${base}${lo} to ${base}${hi}`,
+        "inputs: "+ins.map(q=>q.params.name).join(", ")+" — give the bits one by one ({"+bits.filter(Boolean).slice(0,2).map(b=>`"${b}":1`).join(", ")+"})");
+      if(bits.filter(Boolean).length){ for(let i=lo;i<=hi;i++) out[bits[i]]=Math.floor(x/2**(i-lo))&1; return; }
+      mcpFail(`no INPUT bits '${n}'`, "inputs: "+ins.map(q=>q.params.name+((q.params.width||1)>1?`[${q.params.width-1}:0]`:"")).join(", "));
+    }
     if(has(n)){ out[n]=v; return; }
-    const bits=[]; ins.forEach(c=>{ const m=/^(.*?)_?(\d+)$/.exec(String(c.params.name)); if(m && m[1].toLowerCase()===String(n).toLowerCase() && (c.params.width||1)===1) bits[+m[2]]=c.params.name; });
+    const bits=groupBits(n);
     if(bits.length<2 || bits.some(b=>!b)){ out[n]=v; return; }                 // not a group: the core says "no INPUT"
     const x=acNumber(v, bits.length);
     if(isNaN(x)) mcpFail(`'${n}' is the group ${bits[0]}..${bits[bits.length-1]}: give one number`, `e.g. ${n}: 4704, "0x1260" or "0b${"0".repeat(bits.length)}"`);
     bits.forEach((b,i)=>{ out[b]=(x>>i)&1; });
   });
+  // slices of one bus INPUT add up; a whole value given beside them is the base
+  Object.entries(bus).forEach(([k,o])=>{ const whole=out[k]!=null ? acNumber(out[k], 64) : 0; out[k]=((isNaN(whole)?0:whole) & ~o.m) | o.v; });
   return out;
 }
 {
@@ -156,5 +177,29 @@ async function aiagStructuredCall(run, messages, plan){
     {role:"user", content:`(system) Now the arguments of ${tool}, filled from your plan and the user's request (sheet names, blocks, every connection). ${def.description}`}]),
     def.parameters, tool, 2000);
   if(!args || typeof args!=="object") return null;
+  const why=aiagStructuredUnsafe(run, tool, args);
+  if(why){ run.steps.push({kind:"nudge", text:"constrained call dropped: "+why}); return null; }
   return {id:"sc"+(run.structTries||0), type:"function", function:{name:tool, arguments:JSON.stringify(args)}};
+}
+
+/* after work was done: a reply that still announces a next step (not a closing summary) */
+function aiagPlanAhead(plan){
+  const t=String(plan||"");
+  if(/(เสร็จ|เรียบร้อย|สรุป|ผ่าน|ตรวจแล้ว|ครบแล้ว|ทำงานได้|ถูกต้อง|\b(done|passed|summary|completed?|verified|finished|works)\b)/i.test(t)) return false;
+  return /(ต่อไป|ขั้นต่อไป|ขั้นถัดไป|ถัดไป|จะ(ต่อ|สร้าง|วาง|แก้|เพิ่ม|ลบ|เรียก)|ต้อง(ต่อ|สร้าง|วาง|แก้|เพิ่ม)|ยังไม่ได้|\bnext\b|\bnow (I|we|let)|\bI will\b|\bI'll\b|\blet me\b|\bthen I\b)/i.test(t);
+}
+/* a call the app wrote for the model must never destroy work: no rebuild over a sheet with parts that this run did
+   not make (build_hierarchy with no sheet goes to "top" — the user's top sheet was rebuilt that way), no deletes */
+function aiagStructuredUnsafe(run, tool, args){
+  if(/^(delete_|remove_|rename_|clear_)/.test(tool)) return tool+" is never written for the model";
+  if(!/^build_|^vhdl_block$/.test(tool)) return null;
+  const nm=String(args.sheet||args.name||"").trim();
+  if(!nm && tool==="build_hierarchy") return "build_hierarchy with no sheet name";
+  const P=(state&&state.project&&state.project.schematics)||{};
+  const s=nm && Object.values(P).find(x=>String(x.name).toLowerCase()===nm.toLowerCase());
+  const made=run.made||new Set();
+  if(s && s.components.some(c=>c.type!=="JUNCTION") && !made.has(s.id)){
+    if(args.replace) delete args.replace;          // the tool then refuses with "already has parts" — nothing lost
+  }
+  return null;
 }

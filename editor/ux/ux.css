@@ -177,8 +177,8 @@
 .mcp-approval{position:fixed;right:18px;bottom:18px;z-index:9000;width:min(440px,calc(100vw - 36px));background:var(--bg-2);border:1px solid var(--accent);border-radius:12px;box-shadow:0 10px 32px rgba(0,0,0,.25);padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--ink)}
 .mcp-approval .mcp-ap-h{font-weight:700;display:flex;align-items:center;gap:7px}
 .mcp-approval .mcp-ap-h .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:uxPulse 1.6s ease-in-out infinite}
-.mcp-approval .mcp-ap-body{max-height:40vh;overflow:auto;line-height:1.55;background:var(--bg-3,var(--bg));border-radius:8px;padding:8px 10px;white-space:normal}
-.mcp-approval textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;resize:vertical}
+.mcp-approval .mcp-ap-body{max-height:40vh;overflow:auto;line-height:1.55;background:var(--bg-3);border-radius:8px;padding:8px 10px;white-space:normal}
+.mcp-approval textarea{font:inherit;color:inherit;background:var(--bg-0);border:1px solid var(--line);border-radius:8px;padding:6px 8px;resize:vertical}
 .mcp-approval .mcp-ap-row{display:flex;gap:8px;align-items:center}
 .mcp-approval .grow{flex:1}
 
@@ -307,3 +307,115 @@
 /* 52: sheets that use the one on screen as a block */
 .tree-item.sch{position:relative}
 .su-dot{position:absolute;left:13px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--err,#dc2626);opacity:.45;pointer-events:auto}
+/* 55: push buttons on the simulated board */
+#simPcb .pbtn.pb-mapped{border-color:#2f81f7 !important;box-shadow:0 0 0 1px #2f81f7}
+#simPcb .pbtn.pb-down{background:#ffd !important}
+#simPcb .pbtn .pb-name{position:absolute;top:33px;left:50%;transform:translateX(-50%);font-size:8px;color:#2f81f7;white-space:nowrap;pointer-events:none;font-weight:600}
+/* 57: VHDL blocks */
+.vhb-text{width:100%;height:420px;font:12.5px/1.45 ui-monospace,Consolas,monospace;background:var(--bg-0);color:var(--ink);border:1px solid var(--line,#333);border-radius:6px;padding:8px;resize:vertical;tab-size:2;white-space:pre}
+.vhb-status{margin-top:6px;font-size:12px;min-height:18px}
+.vhb-status.ok{color:var(--ok,#3fb950)} .vhb-status.bad{color:var(--err,#f85149)}
+.vhb-sec .pt-h{display:flex;align-items:center;gap:8px} .vhb-new{margin-left:auto;font-size:11px}
+.vhb-row{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px} .vhb-row small{flex:1;color:var(--ink-dim,#999);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 18: 👍 / 👎 under an agent answer */
+.ag-rate{display:flex;gap:6px;align-items:center;margin:-2px 0 8px 4px;font-size:12px;color:var(--muted,#888)}
+.ag-rate button{border:1px solid transparent;background:none;cursor:pointer;font-size:14px;padding:1px 6px;border-radius:6px;opacity:.55}
+.ag-rate button:hover{opacity:1;border-color:var(--line-2)}
+.ag-rate button.on{opacity:1;border-color:var(--accent,#4a7)}
+
+/* 58: lock a sheet against the agent */
+.tree-item .sr-lock{margin-left:auto;font-size:11px;opacity:0;cursor:pointer;padding:0 4px}
+.tree-item:hover .sr-lock,.tree-item .sr-lock.on{opacity:.75}
+/* 61: one clock edge by hand on the live sim */
+#canvas .bp-clk{cursor:pointer}
+#canvas .bp-clk rect{fill:var(--bg-1);stroke:var(--accent);stroke-width:1}
+#canvas .bp-clk text{font-size:10px;fill:var(--accent);font-weight:700;pointer-events:none}
+#canvas .bp-clk:hover rect{fill:var(--accent)} #canvas .bp-clk:hover text{fill:var(--bg-0)}
+/* 64 — the part / module library window */
+.lib-bg .modal{width:1080px;max-width:96vw;height:86vh}
+.lib-bg .modal-body{padding:12px 14px;display:flex;flex-direction:column;min-height:0}
+.lib-win{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.lib-top{display:flex;gap:10px;align-items:center}
+.lib-top .mod-search{flex:1;margin:0}
+.lib-body{display:flex;gap:12px;flex:1;min-height:0}
+.lib-side{flex:none;width:240px;overflow:auto;display:flex;flex-direction:column;gap:2px;padding-right:4px;border-right:1px solid var(--line)}
+.lib-cat{display:flex;align-items:center;gap:8px;text-align:left;background:transparent;border:1px solid transparent;border-radius:7px;padding:6px 8px;font-size:12.5px;color:var(--ink);cursor:pointer}
+.lib-cat:hover{background:var(--bg-2)}
+.lib-cat.on{background:var(--bg-2);border-color:var(--accent);font-weight:600}
+.lib-cat .ic{width:20px;text-align:center;flex:none}
+.lib-cat .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-cat .n{font-size:10.5px;color:var(--muted)}
+.lib-sep{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:10px 8px 2px;letter-spacing:.04em}
+.lib-main{flex:1;min-width:0;overflow:auto}
+.lib-mh{display:flex;align-items:center;gap:10px;margin:2px 2px 10px;font-size:14px}
+.lib-mh .btn{margin-left:auto}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.lib-card{display:flex;flex-direction:column;gap:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:10px;min-width:0}
+.lib-card:hover{border-color:var(--accent)}
+.lib-card.part{cursor:pointer}
+.lib-row{display:flex;gap:8px}
+.lib-ct{font-size:13px;line-height:1.35}
+.lib-cd{font-size:11.5px;color:var(--ink-dim);line-height:1.45;flex:1}
+.lib-ca{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lib-ca .muted{font-size:10.5px;margin-left:auto}
+.lib-empty{padding:30px 10px;font-size:12.5px}
+.lib-foot{font-size:11px}
+.pt-badge.mine{color:var(--accent);border-color:var(--accent)}
+.gen-mi.lib-mi b{font-weight:600}
+@media (max-width:700px){ .lib-side{width:150px} }
+.lib-sh{font-size:12.5px;font-weight:700;margin:14px 2px 8px;cursor:pointer;color:var(--ink)}
+.lib-sh:first-of-type{margin-top:2px}
+.lib-sh:hover{color:var(--accent)}
+.lib-cat .ic, .lib-sh .ic, .lib-mh .ic{color:var(--accent);font-weight:700}
+.lib-io{font-size:11px;line-height:1.5;color:var(--ink);background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-family:"JetBrains Mono",monospace;word-break:break-word}
+.lib-io b{font-family:inherit;color:var(--ink-dim);font-weight:600}
+.lib-grp{font-size:10.5px}
+/* 66 — VHDL library blocks, icons, Tools menu */
+#menu .gen-mi.lib-hidden{display:none}
+.lib-svg{display:block;width:15px;height:15px}
+.lib-cat .ic, .lib-sh .ic, .lib-mh .ic{display:inline-flex;align-items:center;justify-content:center;width:18px;vertical-align:-3px}
+.pt-badge.vl{color:#7c3aed;border-color:#7c3aed}
+.vl-src{margin-top:8px;font-size:12px} .vl-src textarea{width:100%;min-height:220px;font-size:11px}
+/* 68 — โหมดเรียบง่าย */
+#menu .simple-mi.on{color:var(--ok,#16a34a);font-weight:600}
+body.simple-mode #btnAiChat, body.simple-mode #aiChat, body.simple-mode .step[data-stage="sim"],
+body.simple-mode [data-act="realize-block"], body.simple-mode [data-act="cmdk"], body.simple-mode #iTruth,
+body.simple-mode #menu .gen-mi, body.simple-mode #menu .dd-head, body.simple-mode #btnExportIntent{display:none !important}
+body.simple-mode .step[data-stage="sim"] + *{display:none}
+body.simple-mode #menu .gen-mi.lib-hidden[data-gen="vhdl_block"]{display:flex !important}
+
+/* 69. ถาม-ตอบ assistant: markdown answers, thinking, sources */
+#asTools{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font-size:11px;color:var(--muted)}
+#asTools[hidden]{display:none}
+#asTools .as-tg{display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap}
+#asTools .as-new{background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);cursor:pointer;font:inherit;padding:1px 6px}
+.ac-msg.as-ans{max-width:96%}
+.as-md p{margin:0 0 6px}
+.as-md p:last-child{margin-bottom:0}
+.as-md .as-h{font-weight:700;margin:8px 0 4px}
+.as-md .as-h1,.as-md .as-h2{font-size:1.08em}
+.as-md .as-list{margin:2px 0 6px;padding-left:20px}
+.as-md .as-list li{margin:1px 0}
+.as-md blockquote{margin:4px 0;padding:2px 8px;border-left:3px solid var(--line);color:var(--muted)}
+.as-md hr{border:none;border-top:1px solid var(--line);margin:8px 0}
+.as-md code{font-family:ui-monospace,Consolas,monospace;font-size:.92em;background:var(--bg-1);border:1px solid var(--line);border-radius:4px;padding:0 3px}
+.as-md .as-cite{color:var(--accent);font-size:.75em;margin-left:1px}
+.as-table{border-collapse:collapse;margin:4px 0 8px;font-size:12px;display:block;overflow-x:auto}
+.as-table th,.as-table td{border:1px solid var(--line);padding:2px 7px;text-align:left}
+.as-table th{background:var(--bg-1)}
+.as-code{margin:6px 0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--bg-1)}
+.as-code .as-cbar{display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
+.as-code .as-cbar .grow{flex:1}
+.as-code .as-cbtn{background:transparent;border:1px solid var(--line);border-radius:5px;color:inherit;cursor:pointer;font:inherit;padding:1px 7px}
+.as-code .as-cbtn:hover{border-color:var(--accent);color:var(--accent)}
+.as-code pre{margin:0;padding:7px 9px;overflow-x:auto;max-height:420px}
+.as-code pre code{background:none;border:none;padding:0;font-size:12px;white-space:pre}
+.as-think{margin:0 0 6px;font-size:12px;color:var(--muted)}
+.as-think summary{cursor:pointer;user-select:none}
+.as-think-body{white-space:pre-wrap;max-height:220px;overflow:auto;margin-top:4px;padding:4px 8px;border-left:2px solid var(--line)}
+.as-src{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.as-chip{font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);color:var(--muted);background:var(--bg-1)}
+.as-err{margin-top:6px;color:#d9534f}
+.as-meta{margin-top:4px;font-size:11px;color:var(--muted)}
+.as-stop{margin-top:6px;background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);cursor:pointer;font:inherit;font-size:11px;padding:1px 8px}

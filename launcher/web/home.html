@@ -117,6 +117,7 @@ nav .badge:empty{display:none}
   <div class="apps">
     <button class="app" data-open="studio"><b>Schematic Studio</b><span>วาดวงจรเกต · จำลอง · เลือกขา · สร้าง VHDL/XDC · AI ช่วยวาด</span></button>
     <button class="app" data-open="topdown"><b>Top-Down</b><span>ผังบล็อกของวงจรที่เปิดอยู่ สำหรับรายงาน A4 / PDF / G-code</span></button>
+    <button class="app" data-open="assistant"><b>ผู้ช่วย AI</b><span>ถาม-ตอบ digital logic / VHDL / FPGA · เขียนและอธิบายโค้ด · รันในเครื่อง</span></button>
     <button class="app" id="appFpga" data-open="board"><b>ลงบอร์ด</b><span>สร้าง .bit แล้วโหลดลงบอร์ดจากวงจรที่วาด</span></button>
   </div>
 
@@ -158,7 +159,7 @@ nav .badge:empty{display:none}
     <div class="field llm-endpoint llm-local"><label>Endpoint</label><input type="text" data-f="llm_endpoint"></div>
     <div class="field llm-local"><label>llama-server</label><input type="text" data-f="llama_server" placeholder="เว้นว่าง = หาอัตโนมัติ"></div>
     <div class="field llm-local"><label>ไฟล์โมเดล .gguf</label><input type="text" data-f="llama_model" placeholder="เว้นว่าง = หาอัตโนมัติ"></div>
-    <div class="field llm-local"><label>อาร์กิวเมนต์</label><input type="text" data-f="llama_args" placeholder="ว่าง = ค่าแนะนำ: -c 65536 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 1024 (llama.cpp จัดชั้นลงการ์ดจอเอง)"></div>
+    <div class="field llm-local"><label>อาร์กิวเมนต์</label><input type="text" data-f="llama_args" placeholder="ว่าง = ค่าแนะนำ: -c 24576 --jinja -fa on -ctk q8_0 -ctv q8_0 -np 1 --cache-ram 256 -fitt 512 (llama.cpp จัดชั้นลงการ์ดจอเอง)"></div>
     <div class="field"><label>สถานะ LLM</label><span id="st-llm"></span></div>
   </div>
 
@@ -170,8 +171,18 @@ nav .badge:empty{display:none}
       <div class="bar" style="margin-top:6px"><input type="text" id="llmImportPath" style="flex:1;min-width:0" placeholder="นำเข้าไฟล์ .gguf ที่มีอยู่ เช่น C:\Users\…\Downloads\qwen3.5-4B-SFT1.gguf"><button class="btn" id="llmImport">นำเข้าไฟล์ .gguf</button></div></div></div>
     <div class="step"><b>3</b><div class="grow"><div class="st-h">เริ่มใช้งาน</div>
       <div class="bar"><button class="btn primary" id="llmStart">เริ่มโมเดล</button><button class="btn" id="llmStop">หยุด</button><span class="muted" id="llmMsg"></span></div></div></div>
+    <div class="bar" id="llmMem" style="margin-top:6px"></div>
     <div class="prog" id="llmProg" hidden><div class="prog-bar"><i></i></div><span class="muted"></span><button class="btn" id="llmCancel">ยกเลิก</button></div>
     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">log ของ llama-server</summary><pre class="log" id="llmLog"></pre></details>
+  </div>
+
+  <div class="card" id="memCard">
+    <h3>สิ่งที่ AI จำ <label class="switch"><input type="checkbox" id="memOn"> จำเรื่องที่บอก</label></h3>
+    <p>ผู้ช่วย AI จำสิ่งที่คุณบอกเกี่ยวกับตัวเอง (ชื่อ กลุ่มแลป บอร์ด เรื่องที่ยังไม่เข้าใจ วิธีที่ชอบให้อธิบาย) ไว้ใช้ในแชตครั้งต่อไป ·
+      พิมพ์ “จำไว้ว่า …” ในแชตเพื่อให้จำทันที · เก็บในเครื่องนี้เท่านั้น</p>
+    <div class="list" id="memList"><div class="empty">กำลังโหลด…</div></div>
+    <div class="bar" style="margin-top:8px"><input type="text" id="memNew" style="flex:1" placeholder="เพิ่มเอง เช่น ชอบให้อธิบายเป็นข้อ ๆ พร้อมตัวอย่าง">
+      <button class="btn" id="memAdd">เพิ่ม</button><button class="btn" id="memClear">ลบทั้งหมด</button></div>
   </div>
 
   <div class="card">
@@ -257,7 +268,8 @@ function showTab(name){
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
-$$("[data-open]").forEach(b => b.onclick = () => api("/api/open", {page: b.dataset.open}));
+$$("[data-open]").forEach(b => b.onclick = () => api("/api/open", {page: b.dataset.open})
+  .then(j => { if (j && j.ok === false) toast(j.error || "เปิดไม่ได้"); }));
 $("#btnReveal").onclick = () => api("/api/reveal", {});
 $("#btnNew").onclick = async () => {
   const name = $("#newName").value.trim(); if(!name) return $("#newName").focus();
@@ -398,10 +410,44 @@ async function loadLlm(){
       : dl.phase==="extracting" ? "กำลังแตกไฟล์…" : `${dl.what==="llama"?"llama.cpp":dl.what} · ${gb(dl.done)}${dl.total?" / "+gb(dl.total):""}`;
     $("#llmCancel").hidden = !busy;
   }
+  // memory: every llama-server on this machine (the chat model, the search model, leftovers)
+  const P = (LLM.processes||[]).filter(p=>p.mb>0), ePath = E && E.path;
+  $("#llmMem").innerHTML = P.length ? "หน่วยความจำ: " + P.map(p => {
+      const what = !p.ours ? "ค้างจากครั้งก่อน" : (p.args||"").includes("--embedding") || (ePath && (p.args||"").includes(ePath)) ? "ตัวค้นความหมาย" : "โมเดลแชต";
+      return `<span class="chip ${p.ours?"":"warn"}">${what} ${(p.mb/1024).toFixed(1)} GB</span>`; }).join(" ")
+      + (E && E.running ? ` <button class="btn" id="llmStopEmbed" title="ปิดตัวค้นความหมาย (ค้นแบบคำต่อได้ · เปิดเองเมื่อค้นครั้งหน้า · ปิดเองหลังว่าง 10 นาที)">ปิดตัวค้นความหมาย</button>` : "")
+    : "";
   $("#llmLog").textContent = LLM.log || "—";
   clearTimeout(LLM_T);
   LLM_T = setTimeout(loadLlm, busy || LLM.state==="loading" ? 1000 : 5000);
 }
+// สิ่งที่ AI จำ: the assistant's memory store (launcher /api/assistant/memories)
+const MEM_KIND = {fact:"ข้อมูล", preference:"ความชอบ", todo:"ยังค้าง"};
+function drawMem(j){
+  $("#memOn").checked = !!j.enabled;
+  const rows = j.memories || [];
+  $("#memList").innerHTML = !j.enabled ? `<div class="empty">ปิดอยู่ — ผู้ช่วยจะไม่จำอะไรใหม่ และไม่ใช้สิ่งที่จำไว้</div>`
+    : !rows.length ? `<div class="empty">ยังไม่มีอะไร</div>`
+    : rows.map(m => `<div class="row" data-mid="${m.id}"><span class="chip ${m.pinned?"ok":""}">${m.pinned?"📌 ":""}${MEM_KIND[m.kind]||m.kind}</span>
+        <div class="grow"><input type="text" value="${esc(m.text)}" data-memtext></div>
+        <button class="btn" data-mempin title="${m.pinned?"เลิกปักหมุด":"ปักหมุด: ใช้ทุกคำถาม"}">${m.pinned?"เลิกปัก":"ปักหมุด"}</button>
+        <button class="btn" data-memdel>ลบ</button></div>`).join("");
+}
+const memApi = body => api("/api/assistant/memories", body).then(drawMem).catch(() => {});
+$("#memOn").onchange = e => memApi({enabled: e.target.checked});
+$("#memAdd").onclick = () => { const v = $("#memNew").value.trim(); if(v){ $("#memNew").value = ""; memApi({action:"add", text:v}); } };
+$("#memNew").addEventListener("keydown", e => { if(e.key === "Enter" && !e.isComposing){ e.preventDefault(); $("#memAdd").click(); } });
+$("#memClear").onclick = () => { if(confirm("ลบทุกอย่างที่ AI จำไว้?")) memApi({action:"clear"}); };
+$("#memList").addEventListener("click", e => {
+  const r = e.target.closest("[data-mid]"); if(!r) return; const id = +r.dataset.mid;
+  if(e.target.matches("[data-memdel]")) memApi({action:"delete", id});
+  if(e.target.matches("[data-mempin]")) memApi({action:"update", id, pinned: !r.querySelector(".chip").textContent.includes("📌")});
+});
+$("#memList").addEventListener("change", e => {
+  const r = e.target.closest("[data-mid]"); if(r && e.target.matches("[data-memtext]")) memApi({action:"update", id:+r.dataset.mid, text:e.target.value});
+});
+api("/api/assistant/memories").then(drawMem).catch(() => { $("#memList").innerHTML = `<div class="empty">โหลดไม่ได้</div>`; });
+
 $("#llmCard").addEventListener("change", e => { if(e.target.name==="mdl"){ LLM_SEL=e.target.value; loadLlm(); } });
 $("#llmCard").addEventListener("click", async e => {
   const b = e.target.closest("button"); if(!b) return;
@@ -412,6 +458,7 @@ $("#llmCard").addEventListener("click", async e => {
     if(r.ok){ LLM_SEL = r.path; $("#llmImportPath").value = ""; toast(r.already ? "มีไฟล์นี้อยู่แล้ว — เลือกไว้ให้แล้ว" : "กำลังคัดลอกโมเดลเข้าโปรแกรม…"); } }
   else if(b.id==="llmCancel") r = await api("/api/llm/cancel", {});
   else if(b.id==="llmStop") r = await api("/api/llm/stop", {});
+  else if(b.id==="llmStopEmbed") r = await api("/api/llm/stop_embed", {});
   else if(b.id==="llmStart"){ r = await api("/api/llm/start", {model:LLM_SEL});
     if(r.ok){ CFG = await api("/api/config"); fillSettings(); toast("กำลังเริ่มโมเดล…"); } }
   else return;

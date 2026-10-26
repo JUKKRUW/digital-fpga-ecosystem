@@ -1,0 +1,703 @@
+{
+ "source": "Ch_8.pdf",
+ "group": "content",
+ "chapter": "8",
+ "title": "Integrated Circuit Logic Families",
+ "chunks": [
+  {
+   "id": "ch8-8-0-why-ics",
+   "section": "8-0",
+   "topic": "Why integrated circuits",
+   "type": "concept",
+   "summary": "ICs pack many gates in a small package, cut cost and raise reliability, but cannot handle large currents/voltages or make inductors, transformers or big capacitors.",
+   "text": "Digital IC technology has grown to chips with a million or more gates. Packing circuitry into ICs shrinks the size of a system, lowers cost through mass production, and makes systems more reliable because there are fewer external interconnections (fewer bad solder joints, breaks or shorts on the board). Limits: ICs cannot handle very large currents or voltages because the heat in such a small space would raise the temperature too far, so higher power loads need an interface circuit (discrete parts or special power ICs). ICs also cannot easily implement inductors, transformers or large capacitors, so they are used mainly for low-power information processing. Logic families differ in their main circuit element: TTL and ECL use bipolar transistors; PMOS, NMOS and CMOS use unipolar MOSFETs.",
+   "keywords": [
+    "integrated circuit",
+    "logic family",
+    "TTL",
+    "CMOS",
+    "ECL",
+    "bipolar",
+    "MOSFET"
+   ],
+   "pages": [
+    4,
+    5,
+    6
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-terminology-currents-voltages",
+   "section": "8-1",
+   "topic": "Digital IC terminology: voltages and currents",
+   "type": "definition",
+   "summary": "VIH(min), VIL(max), VOH(min), VOL(max) and IIH, IIL, IOH, IOL define the input/output levels and currents of a logic family.",
+   "text": "Data sheets use standard names. VIH(min): the minimum input voltage accepted as logic 1. VIL(max): the maximum input voltage accepted as logic 0. VOH(min): the minimum output voltage in the logic 1 state under defined load. VOL(max): the maximum output voltage in the logic 0 state under defined load. IIH: current that flows into an input when a HIGH level is applied. IIL: current that flows into an input when a LOW level is applied. IOH: current that flows from an output in the logic 1 state under specified load. IOL: current that flows from an output in the logic 0 state under specified load. An input voltage between VIL(max) and VIH(min) is in the indeterminate range and gives unpredictable output; an output between VOL(max) and VOH(min) is in the disallowed range.",
+   "keywords": [
+    "VIH",
+    "VIL",
+    "VOH",
+    "VOL",
+    "IIH",
+    "IIL",
+    "IOH",
+    "IOL",
+    "data sheet",
+    "indeterminate range"
+   ],
+   "pages": [
+    7,
+    8,
+    16
+   ],
+   "needs_figure": true,
+   "figure_note": "A NAND gate driving an INVERTER, shown in the LOW state (IOL flows into the driver output, IIL out of the load input, VOL/VIL marked) and in the HIGH state (IOH out of the driver, IIH into the load, VOH/VIH marked).",
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-fan-out",
+   "section": "8-1",
+   "topic": "Fan-out (loading factor)",
+   "type": "definition",
+   "summary": "Fan-out is the maximum number of logic inputs one output can drive reliably.",
+   "text": "A logic output usually has to drive several inputs, sometimes of other logic families. The fan-out, or loading factor, is the maximum number of logic inputs an output can drive reliably. Driving more than that pushes the output voltage out of its specified range.",
+   "keywords": [
+    "fan-out",
+    "loading factor",
+    "drive",
+    "แฟนเอาต์",
+    "จำนวนอินพุตที่ขับได้"
+   ],
+   "pages": [
+    9
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-propagation-delay",
+   "section": "8-1",
+   "topic": "Propagation delay tPLH and tPHL",
+   "type": "definition",
+   "summary": "tPLH is the delay for an output going LOW to HIGH and tPHL for HIGH to LOW, measured between the 50% points of input and output.",
+   "text": "A logic signal always takes some time to pass through a circuit. Two propagation delays are defined: tPLH, the delay from input change to the output going from logic 0 to logic 1 (LOW to HIGH), and tPHL, the delay to the output going from logic 1 to logic 0 (HIGH to LOW). They are measured between the 50% points of the input and output waveforms, and the two are generally not equal.",
+   "keywords": [
+    "propagation delay",
+    "tPLH",
+    "tPHL",
+    "timing",
+    "หน่วงเวลา",
+    "เวลาหน่วง"
+   ],
+   "pages": [
+    10
+   ],
+   "needs_figure": true,
+   "figure_note": "Waveform of an inverter: input rises, output falls after tPHL; input falls, output rises after tPLH; delays measured at 50% levels.",
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-power",
+   "section": "8-1",
+   "topic": "Power requirements and average power",
+   "type": "method",
+   "summary": "Power = ICC x VCC; with outputs LOW half the time, ICC(avg) = (ICCH + ICCL)/2 and PD(avg) = ICC(avg) x VCC.",
+   "text": "Every IC needs supply power at VCC (TTL) or VDD (MOS). The power drawn is ICC x VCC (or IDD x VDD). Supply current often depends on the output states: ICCH is the current with all outputs HIGH, ICCL with all outputs LOW. Assuming the outputs are LOW half the time and HIGH half the time, ICC(avg) = (ICCH + ICCL)/2, and the average power dissipated is PD(avg) = ICC(avg) x VCC.",
+   "keywords": [
+    "power dissipation",
+    "ICC",
+    "VCC",
+    "ICCH",
+    "ICCL",
+    "average power",
+    "กำลังไฟฟ้า",
+    "กินไฟ"
+   ],
+   "pages": [
+    11,
+    12,
+    13
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-noise-margin",
+   "section": "8-1",
+   "topic": "Noise and noise margins",
+   "type": "theorem",
+   "summary": "Noise margins: VNH = VOH(min) - VIH(min) and VNL = VIL(max) - VOL(max); e.g. standard TTL VNH = 2.4 - 2.0 = 0.4 V.",
+   "text": "Noise is an unwanted voltage induced on wires by stray electric or magnetic fields; it can make a circuit misbehave. Noise immunity is a circuit's ability to tolerate noise without its output changing, measured by the noise margin. High-state noise margin VNH = VOH(min) - VIH(min); low-state noise margin VNL = VIL(max) - VOL(max). Example for standard 74 TTL: VNH = 2.4 V - 2.0 V = 0.4 V and VNL = 0.8 V - 0.4 V = 0.4 V. Input voltages must stay out of the indeterminate range between VIL(max) and VIH(min). CMOS families generally have larger noise margins than TTL.",
+   "keywords": [
+    "noise",
+    "noise margin",
+    "noise immunity",
+    "VNH",
+    "VNL",
+    "สัญญาณรบกวน",
+    "ขอบเขตสัญญาณรบกวน"
+   ],
+   "pages": [
+    14,
+    15,
+    16
+   ],
+   "needs_figure": true,
+   "figure_note": "Bar diagram comparing output voltage ranges (logic 1 above VOH(min), disallowed range, logic 0 below VOL(max)) with input requirements (logic 1 above VIH(min), indeterminate range, logic 0 below VIL(max)); VNH and VNL are the gaps between them.",
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-sourcing-sinking",
+   "section": "8-1",
+   "topic": "Current sourcing and current sinking",
+   "type": "concept",
+   "summary": "A HIGH output sources current IIH into the load input; a LOW output sinks current IIL coming back from the load input.",
+   "text": "Logic families are described by how current flows between outputs and inputs. Current sourcing: when the driving output is HIGH it supplies current IIH to the load input, which behaves like a resistance to ground. Current sinking: the load input behaves like a resistance to +VCC; when the driving output goes LOW, current IIL flows out of the load input back through the driver output to ground, so the output must be able to sink IIL. TTL outputs sink in the LOW state and source a small current in the HIGH state.",
+   "keywords": [
+    "current sourcing",
+    "current sinking",
+    "IIH",
+    "IIL",
+    "pull-up",
+    "pull-down"
+   ],
+   "pages": [
+    17,
+    18
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-1-packages",
+   "section": "8-1",
+   "topic": "IC packages",
+   "type": "concept",
+   "summary": "DIP (through-hole, notch/dot marks pin 1), SMT packages (SOIC gull-wing, PLCC J-leads, QFP/TQFP), BGA, PGA and LGA for high pin counts.",
+   "text": "ICs come in many packages. The DIP (dual-in-line package) has pins down the two long sides; a notch or dot marks pin 1. Surface-mount technology (SMT) solders ICs onto pads on the board surface with solder paste, allowing tight lead spacing (gull-wing leads). The PLCC has J-shaped leads that curl under the chip and can be socketed. QFP and TQFP have gull-wing pins on all four sides. The ball grid array (BGA) uses solder balls in a grid for even more density; the pin grid array (PGA) uses long pins for sockets; the land grid array (LGA) is a BGA without solder balls. Single logic gates also come in tiny 5- or 6-pin surface-mount packages.",
+   "keywords": [
+    "DIP",
+    "SMT",
+    "PLCC",
+    "QFP",
+    "TQFP",
+    "BGA",
+    "PGA",
+    "LGA",
+    "package"
+   ],
+   "pages": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-2-ttl-structure",
+   "section": "8-2",
+   "topic": "TTL logic family structure",
+   "type": "concept",
+   "summary": "TTL uses bipolar transistors; NAND/AND use a multiple-emitter input transistor, NOR/OR separate input transistors, and outputs are totem-pole (Q3 pull-up, Q4 pull-down).",
+   "text": "Most TTL circuits share a structure. NAND and AND gates use a multiple-emitter input transistor (diode junctions at the inputs); NOR and OR gates use a separate input transistor for each input. Each input is the cathode of a P-N junction: a HIGH input turns it off (only leakage current), a LOW input turns it on (relatively large current). The basic TTL circuit is the NAND gate. Outputs use a totem-pole stage: in the LOW state transistor Q4 (the pull-down or current-sinking transistor) is on and sinks the input current IIL of the load gate; in the HIGH state Q3 (the pull-up or current-sourcing transistor) supplies IIH. Modern TTL series use two transistors in the pull-up.",
+   "keywords": [
+    "TTL",
+    "totem-pole",
+    "multiple-emitter",
+    "pull-up",
+    "pull-down",
+    "NAND"
+   ],
+   "pages": [
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-3-ttl-series",
+   "section": "8-3/8-4",
+   "topic": "TTL numbering and series characteristics",
+   "type": "table",
+   "summary": "74 series numbering (SN/DM/S prefixes); 74, 74S, 74LS, 74AS, 74ALS, 74F differ in delay, power and fan-out; all share VIH(min)=2.0 V and VIL(max)=0.8 V.",
+   "text": "The first TTL line was Texas Instruments' 54/74 series (1964). Manufacturers use the same numbers with their own prefix (SN = Texas Instruments, DM = National Semiconductor, S = Signetics), so DM7402, SN7402 and S7402 are the same function. Data sheets give electrical characteristics, switching characteristics and recommended operating conditions. Typical series values (propagation delay ns / power mW / max clock MHz / fan-out): 74: 9 / 10 / 35 / 10; 74S: 3 / 20 / 125 / 20; 74LS: 9.5 / 2 / 45 / 20; 74AS: 1.7 / 8 / 200 / 40; 74ALS: 4 / 1.2 / 70 / 20; 74F: 3 / 6 / 100 / 33. VOH(min) is 2.4 V for 74, 2.7 V for 74S and 74LS, 2.5 V for 74AS, 74ALS and 74F; VOL(max) is 0.4 V for 74 and 0.5 V for the others; VIH(min) = 2.0 V and VIL(max) = 0.8 V for all.",
+   "keywords": [
+    "74 series",
+    "74LS",
+    "74ALS",
+    "74AS",
+    "74F",
+    "74S",
+    "data sheet",
+    "TTL series"
+   ],
+   "pages": [
+    34,
+    35,
+    36,
+    37
+   ],
+   "needs_figure": true,
+   "figure_note": "Table of typical TTL series characteristics (74, 74S, 74LS, 74AS, 74ALS, 74F): propagation delay, power, max clock, fan-out, VOH(min), VOL(max), VIH(min), VIL(max).",
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-5-ttl-fanout",
+   "section": "8-5",
+   "topic": "Determining TTL fan-out",
+   "type": "method",
+   "summary": "Sum the IIH of all driven inputs (must be <= IOH) and the IIL of all driven inputs (must be <= IOL); the smaller count is the fan-out.",
+   "text": "A TTL output can only sink so much current in the LOW state and source so much in the HIGH state; exceeding it pushes the output out of its specified voltage range. To find how many inputs an output can drive: add the IIH of all inputs connected to the output — the sum must not exceed the output's IOH; and add the IIL of all inputs — the sum must not exceed IOL. The fan-out is the number of loads that satisfies both.",
+   "keywords": [
+    "fan-out",
+    "IOH",
+    "IOL",
+    "IIH",
+    "IIL",
+    "loading"
+   ],
+   "pages": [
+    38,
+    39
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-6-ttl-other",
+   "section": "8-6",
+   "topic": "Other TTL characteristics: floating, unused and tied inputs, transients",
+   "type": "concept",
+   "summary": "A floating TTL input acts like a 1; tie unused inputs to a used input or to +5 V through 1 kΩ (AND/NAND) or ground (OR/NOR); decouple supply spikes with 0.01–0.1 µF capacitors.",
+   "text": "On a TTL IC an unconnected (floating) input behaves as a logic 1, but leaving inputs floating is poor practice. Unused inputs can be tied to +5 V through a 1 kΩ resistor (logic 1, for AND/NAND), tied to ground (for OR/NOR), or tied to a used input. Inputs tied together normally present the sum of their load currents, except for AND and NAND gates whose LOW-state load stays that of a single input. An input that must normally be LOW and go HIGH when a switch is pressed is held LOW by a resistor to ground. The totem-pole output draws current spikes on every switch, so ceramic disk capacitors (0.01 or 0.1 µF) between VCC and ground are placed near the ICs to short these spikes.",
+   "keywords": [
+    "floating input",
+    "unused input",
+    "pull-up resistor",
+    "decoupling capacitor",
+    "current transient",
+    "TTL",
+    "ขาลอย",
+    "อินพุตที่ไม่ได้ต่อ",
+    "ขาที่ไม่ใช้",
+    "ไม่ต่อ input",
+    "ปล่อยขาลอย",
+    "ปัญหาจากการไม่ต่อ input"
+   ],
+   "pages": [
+    40,
+    41,
+    42,
+    43,
+    44
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-7-mos",
+   "section": "8-7",
+   "topic": "MOS technology and the MOSFET switch",
+   "type": "concept",
+   "summary": "MOS ICs use enhancement MOSFETs; an N-MOS turns on when VGS exceeds the threshold VT, a P-MOS when the gate is VT below the source. MOS is small and low-power but static-sensitive.",
+   "text": "MOS stands for metal electrode over an oxide insulator over a semiconductor; its transistors are field-effect transistors (MOSFETs). The electric field from the gate changes the resistance of the channel between drain and source. MOS ICs are built almost entirely of MOSFETs, which are simple, cheap, small and use very little power; their main drawback is susceptibility to static-electricity damage. MOS ICs use enhancement MOSFETs only (no channel until the gate voltage creates one). In an N-channel MOSFET (N-MOS) the drain is biased positive relative to the source; the gate-to-source voltage VGS controls the drain-source resistance — above the threshold VT the device is ON, below it OFF. A P-channel MOSFET (P-MOS) works the same with opposite polarities: it turns ON when the gate is at least VT below the source.",
+   "keywords": [
+    "MOS",
+    "MOSFET",
+    "N-MOS",
+    "P-MOS",
+    "enhancement",
+    "threshold voltage",
+    "VGS"
+   ],
+   "pages": [
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-8-cmos",
+   "section": "8-8",
+   "topic": "CMOS inverter, NAND and NOR",
+   "type": "concept",
+   "summary": "A CMOS inverter is a P-MOS (source to VDD) and an N-MOS (source to VSS) in series with common gates and drains; NAND adds parallel P and series N, NOR adds series P and parallel N.",
+   "text": "Complementary MOS (CMOS) puts P-channel and N-channel transistors in the same circuit. The CMOS INVERTER has two MOSFETs in series: the P-MOS source goes to VDD, the N-MOS source to ground (VSS); the two gates are tied together as the input and the two drains as the output. Input LOW turns the P-MOS on and the N-MOS off (output HIGH); input HIGH does the opposite. A CMOS NAND gate adds a P-MOS in parallel and an N-MOS in series to the inverter; a NOR gate adds a P-MOS in series and an N-MOS in parallel. Two cross-coupled CMOS NOR or NAND gates form a SET-RESET latch, and extra gating turns it into clocked D and J-K flip-flops.",
+   "keywords": [
+    "CMOS",
+    "inverter",
+    "NAND",
+    "NOR",
+    "complementary",
+    "VDD",
+    "VSS",
+    "latch"
+   ],
+   "pages": [
+    52,
+    53,
+    54,
+    55,
+    56,
+    57
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-9-cmos-series",
+   "section": "8-9",
+   "topic": "CMOS series and compatibility terms",
+   "type": "concept",
+   "summary": "Pin-compatible, functionally equivalent and electrically compatible; series 4000/14000, 74HC/HCT, 74AC/ACT, 74AHC/AHCT, BiCMOS; supply 3–15 V (4000) or 2–6 V (74 series).",
+   "text": "Terms for mixing ICs: pin-compatible — same pin configuration; functionally equivalent — same logic function; electrically compatible — can be connected directly without special measures. CMOS series: the 4000 series (RCA, equivalent to Motorola 14000) is the oldest and rarely used in new designs; 74HC/HCT is about ten times faster, comparable to 74LS, and pin-compatible and functionally equivalent to TTL parts with the same number (HCT is electrically compatible with TTL); 74AC/ACT (advanced CMOS) is functionally equivalent to TTL but not pin-compatible; 74AHC/AHCT is about three times faster than HC with similar noise immunity; BiCMOS combines bipolar and CMOS for low power and high speed, mainly for microprocessor and bus interfacing. The 4000/14000 and 74C series run from 3 to 15 V, the 74 series CMOS typically from 2 to 6 V, and lower-voltage series run at 2.5 or 3.3 V.",
+   "keywords": [
+    "CMOS series",
+    "74HC",
+    "74HCT",
+    "74AC",
+    "74AHC",
+    "4000 series",
+    "BiCMOS",
+    "pin-compatible",
+    "electrically compatible"
+   ],
+   "pages": [
+    58,
+    59,
+    60,
+    61
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-9-cmos-power-fanout",
+   "section": "8-9",
+   "topic": "CMOS power, fan-out, speed, static and latch-up",
+   "type": "concept",
+   "summary": "CMOS static power is tiny but rises with switching frequency; inputs are ~10^12 Ω with ~5 pF so fan-out is limited by capacitance; handle with ESD precautions; parasitic transistors can latch up.",
+   "text": "A CMOS circuit that is not switching dissipates almost no power, ideal for batteries; power rises in proportion to switching frequency because each LOW-to-HIGH transition must charge the load capacitance (the inputs it drives plus its own output capacitance), drawing current spikes from VDD. CMOS inputs have a very large resistance (about 10^12 ohms) and draw essentially no current, but each input is about a 5 pF load, and this capacitance limits how many inputs one output can drive. CMOS switches fast because of its low output resistance (the RON of the P-MOS in the HIGH state, typically 1 kΩ or less). MOS families are especially sensitive to electrostatic discharge: ground instruments, soldering irons and workbench; wear a grounded wrist strap; keep ICs in conductive foam or foil; avoid touching pins; short board edge connectors in transit; never leave unused inputs unconnected. Parasitic PNP/NPN transistors in the substrate can latch up (stay on) and destroy the IC; modern parts have protection, but latch-up can still be triggered by exceeding maximum voltage ratings or by spikes/ringing on inputs and outputs.",
+   "keywords": [
+    "CMOS power",
+    "switching frequency",
+    "load capacitance",
+    "fan-out",
+    "ESD",
+    "static",
+    "latch-up",
+    "ไฟฟ้าสถิต",
+    "ไฟฟ้าสถิตย์",
+    "ป้องกันไฟฟ้าสถิต"
+   ],
+   "pages": [
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-10-low-voltage",
+   "section": "8-10",
+   "topic": "Low-voltage technology",
+   "type": "concept",
+   "summary": "Denser chips need lower supply voltages; low-voltage CMOS series (LVC, ALVC, LV, AVC 2.5 V, AUC 1.8 V, AUP) and BiCMOS (LVT, ALVT) replace 5 V logic.",
+   "text": "Packing circuits closer together speeds signals but thins the insulation (lower breakdown voltage) and raises power density, so chips run at lower voltages. Low-voltage CMOS series include 74LVC (widest choice of gates and MSI functions), 74ALVC (highest performance), 74LV, 74AVC (optimized for 2.5 V), 74AUC (1.8 V), 74AUP (lowest power, for battery devices), 74CBT/CBTLV (bus switches), 74GTLP (backplanes), 74SSTV (memory), TS switches (mixed signal) and 74TVC (voltage clamps). BiCMOS low-voltage series 74LVT and 74ALVT (3.3 or 2.5 V, about 3 ns) have TTL-equivalent output levels and are fully electrically compatible with TTL; 74ALB is a 3.3 V bus-interface series with 25 mA drive and 2.2 ns delay. Digital systems are moving from 5 V to 3.3 V, 2.5 V and lower (the FPGA board in this course uses 3.3 V I/O).",
+   "keywords": [
+    "low voltage",
+    "3.3 V",
+    "2.5 V",
+    "74LVC",
+    "74LVT",
+    "BiCMOS",
+    "supply voltage",
+    "แรงดันต่ำ"
+   ],
+   "pages": [
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-11-open-collector",
+   "section": "8-11",
+   "topic": "Open-collector / open-drain outputs",
+   "type": "concept",
+   "summary": "Totem-pole outputs must never be tied together; open-collector (TTL) or open-drain (CMOS) outputs have no pull-up, so tied outputs with an external pull-up form a wired-AND; they also drive LEDs and high-voltage loads.",
+   "text": "Two conventional totem-pole (or CMOS) outputs connected to the same wire fight each other when one is HIGH and the other LOW. Removing the active pull-up transistor gives an open-collector output (TTL) or open-drain output (CMOS): the output can only pull LOW, so several outputs can share a wire with one external pull-up resistor, which forms a wired-AND (the wire is HIGH only when all outputs are off). Open-collector/drain outputs are also used as buffer/drivers for loads needing more current or a higher voltage than a normal output, and to drive indicator LEDs. The IEEE/ANSI symbol for such an output is an underlined diamond.",
+   "keywords": [
+    "open collector",
+    "open drain",
+    "wired-AND",
+    "pull-up resistor",
+    "buffer",
+    "driver",
+    "LED",
+    "คอลเลกเตอร์เปิด"
+   ],
+   "pages": [
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-12-tristate",
+   "section": "8-12",
+   "topic": "Tristate (three-state) outputs",
+   "type": "concept",
+   "summary": "A tristate output is HIGH, LOW or high-impedance (Hi-Z) controlled by an enable (OE); tied tristate outputs share a bus as long as only one is enabled.",
+   "text": "A tristate output keeps the fast pull-up/pull-down output stage but adds a third state, high impedance (Hi-Z), in which both output transistors are off and the pin is effectively disconnected. An enable input (E or OE) controls it: with OE = 1 the device works normally (e.g. an inverter outputs the complement of its input); with OE = 0 the output floats in Hi-Z. Tristate outputs can be wired together to share a bus without losing speed, but only one may be enabled at a time, otherwise two active outputs fight. Examples: the 74LS374 octal D flip-flop register with tristate outputs, and tristate buffers (inverting or non-inverting) that pass or block a signal. The IEEE/ANSI tristate symbol is a downward-pointing triangle.",
+   "keywords": [
+    "tristate",
+    "three-state",
+    "high impedance",
+    "Hi-Z",
+    "output enable",
+    "bus",
+    "74LS374",
+    "สามสถานะ",
+    "อิมพีแดนซ์สูง"
+   ],
+   "pages": [
+    83,
+    84,
+    85,
+    86,
+    87,
+    88
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-13-bus-interface",
+   "section": "8-13",
+   "topic": "High-speed bus interface logic",
+   "type": "concept",
+   "summary": "Bus wires longer than about 4 inches act as transmission lines and need termination (≈50 Ω, divider, RC, diode or series); GTLP and LVDS are bus signaling methods.",
+   "text": "At high frequency, bus wires longer than about 4 inches behave as transmission lines, and pulses reflect off the end. The end is terminated with a resistance equal to the line impedance (about 50 Ω), or with a voltage divider of larger resistors, an RC termination (the capacitor blocks DC), diodes that clamp overshoot and undershoot (ringing), or a series resistor at the source, which slows switching but makes the bus more reliable. GTLP (Gunning Transceiver Logic Plus) devices drive long buses; LVDS (low-voltage differential signaling) uses two wires per signal and responds to their difference.",
+   "keywords": [
+    "bus",
+    "transmission line",
+    "termination",
+    "ringing",
+    "GTLP",
+    "LVDS",
+    "differential"
+   ],
+   "pages": [
+    89,
+    90,
+    91,
+    92
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-14-ecl",
+   "section": "8-14",
+   "topic": "ECL logic family",
+   "type": "concept",
+   "summary": "Emitter-coupled logic switches a fixed current between transistors (current-mode logic); very fast (~360 ps), levels about -0.8 V and -1.7 V, ~150 mV noise margin, complementary outputs.",
+   "text": "Emitter-coupled logic (ECL), also called current-mode logic (CML), works by switching a fixed bias current, smaller than saturation current, from one transistor's collector to another, so transistors never saturate. The basic circuit is a differential amplifier with complementary outputs, and the basic gate is an OR/NOR. ECL is very fast (typical propagation delay about 360 ps), its nominal levels are -0.8 V for logic 1 and -1.7 V for logic 0, worst-case noise margins are only about 150 mV, gates usually give an output and its complement (no inverters needed), and the constant current flow avoids noise spikes.",
+   "keywords": [
+    "ECL",
+    "emitter-coupled logic",
+    "current-mode logic",
+    "OR/NOR",
+    "differential amplifier"
+   ],
+   "pages": [
+    93,
+    94,
+    95,
+    96
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-15-transmission-gate",
+   "section": "8-15",
+   "topic": "CMOS transmission gate (bilateral switch)",
+   "type": "concept",
+   "summary": "A CMOS transmission gate is a logic-controlled switch that passes signals in both directions, digital or analog between 0 and VDD (e.g. the 4016 quad bilateral switch).",
+   "text": "The transmission gate or bilateral switch has no TTL or ECL counterpart. It acts like a single-pole single-throw switch controlled by a logic input and passes signals in both directions, so it is used for digital and analog signals; the signal must stay between 0 and VDD. The 4016 IC contains four bilateral switches, each with its own control input, and either terminal can be the input or output.",
+   "keywords": [
+    "transmission gate",
+    "bilateral switch",
+    "4016",
+    "analog switch",
+    "CMOS"
+   ],
+   "pages": [
+    97,
+    98,
+    99
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-16-interfacing",
+   "section": "8-16",
+   "topic": "IC interfacing and compatibility",
+   "type": "method",
+   "summary": "Direct connection works when VOH(min) > VIH(min)+VNH and VOL(max)+VNL < VIL(max) (and the currents fit); otherwise an interface circuit is needed, e.g. a pull-up resistor when TTL drives 5 V CMOS.",
+   "text": "Interfacing connects the output of one circuit to the input of another. The simplest interface is a direct connection, possible when the driver's HIGHs are high enough and its LOWs low enough for the load and the current loading is acceptable: VOH(min) of the driver > VIH(min) of the load (+ noise margin) and VOL(max) of the driver (+ noise margin) < VIL(max) of the load. Otherwise an interface circuit conditions the signal. Typical input/output currents: CMOS (4000B, 74HC/HCT, 74AC/ACT, 74AHC/AHCT) inputs draw about 1 µA; outputs supply 0.4 mA (4000B), 4 mA (HC/HCT), 24 mA (AC/ACT) or 8 mA (AHC/AHCT). TTL: 74 IIH 40 µA, IIL 1.6 mA, IOH 0.4 mA, IOL 16 mA; 74LS IIH 20 µA, IIL 0.4 mA, IOL 8 mA; 74AS IOL 20 mA; 74ALS IOL 8 mA; 74F IOL 20 mA. When TTL drives 5 V CMOS (not HCT), its VOH can be too low, so an external pull-up resistor to +5 V is added. CMOS outputs behave like a small resistance to VDD (HIGH) or to ground (LOW).",
+   "keywords": [
+    "interfacing",
+    "compatibility",
+    "pull-up resistor",
+    "TTL to CMOS",
+    "IIH",
+    "IIL",
+    "IOH",
+    "IOL",
+    "การเชื่อมต่อ",
+    "ต่อข้ามตระกูล"
+   ],
+   "pages": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105
+   ],
+   "needs_figure": true,
+   "figure_note": "Bar diagrams: when VOH(min) is above VIH(min) and VOL(max) below VIL(max) no interface is needed; when HIGHs are not high enough or LOWs not low enough an interface circuit is required. A table lists IIH, IIL, IOH, IOL for CMOS 4000B, 74HC/HCT, 74AC/ACT, 74AHC/AHCT and TTL 74, 74LS, 74AS, 74ALS, 74F.",
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-17-mixed-voltage",
+   "section": "8-17",
+   "topic": "Mixed-voltage interfacing",
+   "type": "method",
+   "summary": "Different supply voltages need a level translator: an open-drain buffer with a pull-up to the load's supply, a dual-supply translator, or a low-voltage buffer with 5 V-tolerant inputs.",
+   "text": "When driver and load run on different supply voltages (for example 5 V and 3.3 V), a voltage-level translator is needed. The simplest is an open-drain buffer with a pull-up resistor to the load's supply. Another is a dual-supply level translator with one supply for the inputs and another for the outputs. A third is a buffer from a low-voltage series whose inputs are 5-V tolerant, so it can accept the higher-voltage signal.",
+   "keywords": [
+    "mixed voltage",
+    "level translator",
+    "5 V tolerant",
+    "open drain",
+    "3.3 V"
+   ],
+   "pages": [
+    106,
+    107,
+    108
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-18-comparator",
+   "section": "8-18",
+   "topic": "Analog voltage comparators",
+   "type": "concept",
+   "summary": "A comparator outputs HIGH when V(+) > V(-) and LOW otherwise — a one-bit A/D converter (e.g. LM339 temperature-limit detector).",
+   "text": "An analog voltage comparator compares two voltages: if the (+) input is greater than the (-) input the output is HIGH; if the (-) input is greater the output is LOW. The inputs are analog but the output is always a digital HIGH or LOW, so a comparator is a one-bit analog-to-digital converter. Example: an LM339 comparator used as a temperature-limit detector that tells a digital system when a sensor voltage passes a reference.",
+   "keywords": [
+    "comparator",
+    "LM339",
+    "analog",
+    "one-bit ADC",
+    "interfacing"
+   ],
+   "pages": [
+    109,
+    110
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-19-troubleshooting",
+   "section": "8-19",
+   "topic": "Troubleshooting with a logic pulser and logic probe",
+   "type": "method",
+   "summary": "A logic pulser injects a short pulse opposite to the node's current level; with a logic probe it checks that a node and the circuit respond.",
+   "text": "A logic pulser senses the voltage at a node and, when actuated, injects a short pulse in the opposite direction. It can pulse any node not shorted directly to ground or VCC. Used with a logic probe (which shows the level or pulses at a node) it checks whether gates respond and helps find shorted or open nodes.",
+   "keywords": [
+    "troubleshooting",
+    "logic pulser",
+    "logic probe",
+    "node"
+   ],
+   "pages": [
+    111
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  },
+  {
+   "id": "ch8-8-20-fpga",
+   "section": "8-20",
+   "topic": "Electrical characteristics of an FPGA",
+   "type": "concept",
+   "summary": "FPGAs use separate supplies for the core (VCCINT, e.g. 1.2 V) and the I/O (VCCIO), support many I/O standards incl. differential, and have speed grades; CMOS power depends on voltage, frequency and loads.",
+   "text": "Using the Altera Cyclone II as an example: an FPGA needs two supply voltages — VCCINT for the internal logic (nominal 1.2 V) and VCCIO for the input/output buffers, which sets the I/O standard (for example 3.3 V LVCMOS/LVTTL, 2.5 V, 1.8 V). FPGAs support many single-ended and differential I/O standards; differential standards improve noise immunity and reduce EMI and power. Being CMOS, FPGA power depends on supply voltage, switching frequencies and I/O loads, and vendor tools estimate it (Quartus II PowerPlay Early Power Estimator and Power Analyzer). Speed depends on the design and its implementation; chips come in speed grades (-6, -7, -8). The EDGE Spartan-7 board in this course uses 3.3 V LVCMOS33 I/O.",
+   "keywords": [
+    "FPGA",
+    "VCCINT",
+    "VCCIO",
+    "I/O standard",
+    "LVCMOS33",
+    "speed grade",
+    "power estimation",
+    "Cyclone II",
+    "ไฟเลี้ยง FPGA"
+   ],
+   "pages": [
+    112,
+    113,
+    114,
+    115
+   ],
+   "needs_figure": false,
+   "related_labs": []
+  }
+ ]
+}

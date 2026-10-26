@@ -79,7 +79,10 @@ const LAB_PIN_PRESETS={
     {re:/start|stop|btn|^ss$|run|toggle/i, dir:"in", t:()=>"pb:0"},
     {re:/^(sw|sws|switch(es)?|time_?in|t_?in|preset|din|start_?time)$/i, dir:"in", t:i=>"sw:"+i},
     {re:/err/i, dir:"out", t:()=>"led:0"}, {re:/time_?up|timeup|t_?up|done|zero|finish/i, dir:"out", t:()=>"led:1"}]},
-  "8":{title:"แลป 8 ตัวเลข 4 หลักจาก SW15–0", rules:[
+  "8":{title:"แลป 8 ตัวเลข 4 หลักจาก SW15–0 / จอ LCD", rules:[
+    // the LCD (lab 8.1): data[7:0] → LCD data 7…0 (= the pins of LED 7…0), RS M5, E P5
+    {re:/^(lcd_?)?(data|db|d)$/i, dir:"out", t:i=>"lcd:d"+i}, {re:/^(lcd_?)?rs$/i, dir:"out", t:()=>"lcd:rs"},
+    {re:/^(lcd_?)?(e|en|enable)$/i, dir:"out", t:()=>"lcd:e"},
     {re:/thousands|d3|dig3/i, dir:"in", t:i=>"sw:"+(12+i)}, {re:/hundreds|d2|dig2/i, dir:"in", t:i=>"sw:"+(8+i)},
     {re:/tens|d1|dig1/i, dir:"in", t:i=>"sw:"+(4+i)}, {re:/ones|units?|d0|dig0/i, dir:"in", t:i=>"sw:"+i}]},
 };
